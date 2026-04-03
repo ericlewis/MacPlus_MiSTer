@@ -190,7 +190,6 @@ end
 // Read side: drain one word per bus cycle
 reg [15:0] dio_data;
 reg [20:0] dio_a;
-reg        dio_write_word;
 
 // ======== Reset ========
 reg       n_reset = 0;
@@ -493,7 +492,7 @@ wire [24:0] sdram_addr = download_cycle ? {4'b0001, dio_a} :
 
 wire [15:0] sdram_din  = download_cycle ? dio_data              : memoryDataOut;
 wire  [1:0] sdram_ds   = download_cycle ? 2'b11                 : {!_memoryUDS, !_memoryLDS};
-wire        sdram_we   = download_cycle ? dio_write_word        : !_ramWE;
+wire        sdram_we   = download_cycle ? dio_write             : !_ramWE;
 wire        sdram_oe   = download_cycle ? 1'b0                  : (!_ramOE || !_romOE || dskReadAckInt || dskReadAckExt);
 
 wire [15:0] extra_rom_data_demux = memoryAddr[0] ? {sdram_out[7:0], sdram_out[7:0]} : {sdram_out[15:8], sdram_out[15:8]};
@@ -521,27 +520,27 @@ sdram sdram_inst (
     .dout    (sdram_out)
 );
 
-// DIO write: drain FIFO one word per bus cycle
-reg dio_write;
-reg ioctl_wait = 0;
+// DIO write: drain FIFO synchronized to bus cycles
+// MiSTer pattern: dio_write goes high when data is pending,
+// stays high during the dioBusControl window, clears after write completes
+reg dio_write = 0;
 
 always @(posedge clk_sys) begin
     reg old_cyc;
-    dio_write_word <= 0;
-
     old_cyc <= dioBusControl;
 
-    // On falling edge of dioBusControl, if FIFO has data, start a write
-    if (~dioBusControl & old_cyc) begin
-        if (dio_fifo_rd != dio_fifo_wr) begin
-            {dio_a, dio_data} <= dio_fifo[dio_fifo_rd];
-            dio_fifo_rd <= dio_fifo_rd + 1'd1;
-            dio_write_word <= 1;
-            dio_write <= 1;
-        end else begin
-            dio_write <= 0;
-        end
+    // When FIFO has data and we're not currently writing, load next word
+    if (!dio_write && dio_fifo_rd != dio_fifo_wr && ~dioBusControl) begin
+        {dio_a, dio_data} <= dio_fifo[dio_fifo_rd];
+        dio_fifo_rd <= dio_fifo_rd + 1'd1;
+        dio_write <= 1;
+    end
+
+    // Clear write flag after bus cycle completes (falling edge of dioBusControl)
+    if (old_cyc & ~dioBusControl & dio_write) begin
+        dio_write <= 0;
     end
 end
+
 
 endmodule
