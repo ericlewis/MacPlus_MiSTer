@@ -1,0 +1,15 @@
+{
+  "data": {
+    "magic": "APF_VER_1",
+    "data_slots": [
+      {
+        "id": 0,
+        "name": "Mac ROM",
+        "required": true,
+        "parameters": "0x1",
+        "extensions": ["rom", "bin"],
+        "address": "0x10000000"
+      }
+    ]
+  }
+}
