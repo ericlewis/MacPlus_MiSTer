@@ -161,31 +161,36 @@ reg dl_s0, dl_s1;
 always @(posedge clk_sys) begin dl_s0 <= is_downloading; dl_s1 <= dl_s0; end
 wire dio_download = dl_s1;
 
-// Convert data_loader 8-bit output to 16-bit (Mac uses word-wide data)
-// Accumulate two bytes into one 16-bit word
-reg [7:0] dio_byte_hi;
-reg       dio_byte_toggle = 0;
-reg       dio_write_word = 0;
-reg [15:0] dio_data;
-reg [20:0] dio_a;
-wire [7:0] dio_index = 0; // ROM
+// Convert data_loader 8-bit to 16-bit words and buffer in FIFO
+// Mac bus can only write one word per bus cycle (~32 clk_sys)
+reg [7:0]  dio_byte_hi;
+reg        dio_byte_toggle = 0;
+wire [7:0] dio_index = 0;
 
+// FIFO: stores {addr[20:0], data[15:0]} = 37 bits
+reg [36:0] dio_fifo [0:255];
+reg [7:0]  dio_fifo_wr = 0;
+reg [7:0]  dio_fifo_rd = 0;
+
+// Write side: pack bytes into words, push to FIFO
 always @(posedge clk_sys) begin
-    dio_write_word <= 0;
     if (dl_wr) begin
         if (!dio_byte_toggle) begin
             dio_byte_hi <= dl_data;
             dio_byte_toggle <= 1;
         end else begin
-            // Mac ROM byte swap (matching MiSTer's {ioctl_data[7:0], ioctl_data[15:8]})
-            dio_data <= {dl_data, dio_byte_hi};
-            dio_a <= dl_addr[21:1]; // word address
-            dio_write_word <= 1;
+            dio_fifo[dio_fifo_wr] <= {dl_addr[21:1], dl_data, dio_byte_hi};
+            dio_fifo_wr <= dio_fifo_wr + 1'd1;
             dio_byte_toggle <= 0;
         end
     end
     if (!dio_download) dio_byte_toggle <= 0;
 end
+
+// Read side: drain one word per bus cycle
+reg [15:0] dio_data;
+reg [20:0] dio_a;
+reg        dio_write_word;
 
 // ======== Reset ========
 reg       n_reset = 0;
@@ -516,17 +521,27 @@ sdram sdram_inst (
     .dout    (sdram_out)
 );
 
-// DIO write synchronization with bus cycle
+// DIO write: drain FIFO one word per bus cycle
 reg dio_write;
+reg ioctl_wait = 0;
+
 always @(posedge clk_sys) begin
     reg old_cyc;
-    if (dio_write_word) begin
-        ioctl_wait <= 1;
-    end
+    dio_write_word <= 0;
+
     old_cyc <= dioBusControl;
-    if (~dioBusControl) dio_write <= ioctl_wait;
-    if (old_cyc & ~dioBusControl & dio_write) ioctl_wait <= 0;
+
+    // On falling edge of dioBusControl, if FIFO has data, start a write
+    if (~dioBusControl & old_cyc) begin
+        if (dio_fifo_rd != dio_fifo_wr) begin
+            {dio_a, dio_data} <= dio_fifo[dio_fifo_rd];
+            dio_fifo_rd <= dio_fifo_rd + 1'd1;
+            dio_write_word <= 1;
+            dio_write <= 1;
+        end else begin
+            dio_write <= 0;
+        end
+    end
 end
-reg ioctl_wait = 0;
 
 endmodule
