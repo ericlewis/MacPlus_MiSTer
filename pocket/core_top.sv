@@ -128,17 +128,12 @@ end
 wire clk_sys; // 32.5 MHz
 wire clk_mem; // 65 MHz
 
+wire clk_sys_90; // 32.5 MHz 90° for video DDR
+
 pll pll_inst(
     .refclk(clk_74a), .rst(1'b0),
-    .outclk_0(clk_mem), .outclk_1(clk_sys),
+    .outclk_0(clk_mem), .outclk_1(clk_sys), .outclk_2(clk_sys_90),
     .locked(pll_core_locked)
-);
-
-// Video PLL: 12.288 MHz (template, proven working)
-wire clk_vid, clk_vid_90;
-mf_pllbase pll_vid(
-    .refclk(clk_74a), .rst(1'b0),
-    .outclk_0(clk_vid), .outclk_1(clk_vid_90), .locked()
 );
 
 // ======== ROM Loading ========
@@ -436,27 +431,16 @@ dataController_top #(SCSI_DEVS) dc0 (
 );
 
 // ======== Video Output ========
-// Mac Plus: 512x342 monochrome (1-bit)
-assign video_rgb_clock    = clk_vid;
-assign video_rgb_clock_90 = clk_vid_90;
+// Mac Plus: 512x342 monochrome, every clk_sys cycle is one pixel
+assign video_rgb_clock    = clk_sys;
+assign video_rgb_clock_90 = clk_sys_90;
 assign video_skip = 1'b0;
 
-reg [7:0] vid_r, vid_g, vid_b;
-reg       vid_hs, vid_vs, vid_de;
-
-always @(posedge clk_vid) begin
-    vid_r  <= {8{pixelOut}};
-    vid_g  <= {8{pixelOut}};
-    vid_b  <= {8{pixelOut}};
-    vid_de <= _vblank & _hblank;
-    vid_vs <= vsync;
-    vid_hs <= hsync;
-end
-
-assign video_rgb = vid_de ? {vid_r, vid_g, vid_b} : 24'd0;
-assign video_de  = vid_de;
-assign video_vs  = vid_vs;
-assign video_hs  = vid_hs;
+wire [7:0] pix = {8{pixelOut}};
+assign video_rgb = (_vblank & _hblank) ? {pix, pix, pix} : 24'd0;
+assign video_de  = _vblank & _hblank;
+assign video_vs  = vsync;
+assign video_hs  = hsync;
 
 // ======== Audio ========
 assign audio_mclk = audgen_mclk;
