@@ -520,26 +520,25 @@ sdram sdram_inst (
     .dout    (sdram_out)
 );
 
-// DIO write: drain FIFO synchronized to bus cycles
-// MiSTer pattern: dio_write goes high when data is pending,
-// stays high during the dioBusControl window, clears after write completes
+// DIO write: match MiSTer's ioctl_wait pattern exactly
+// ioctl_wait goes high when word is ready, cleared after bus cycle writes it
 reg dio_write = 0;
+reg ioctl_wait = 0;
 
 always @(posedge clk_sys) begin
     reg old_cyc;
-    old_cyc <= dioBusControl;
 
-    // When FIFO has data and we're not currently writing, load next word
-    if (!dio_write && dio_fifo_rd != dio_fifo_wr && ~dioBusControl) begin
+    // Load next word from FIFO when not waiting
+    if (!ioctl_wait && dio_fifo_rd != dio_fifo_wr) begin
         {dio_a, dio_data} <= dio_fifo[dio_fifo_rd];
         dio_fifo_rd <= dio_fifo_rd + 1'd1;
-        dio_write <= 1;
+        ioctl_wait <= 1;
     end
 
-    // Clear write flag after bus cycle completes (falling edge of dioBusControl)
-    if (old_cyc & ~dioBusControl & dio_write) begin
-        dio_write <= 0;
-    end
+    // MiSTer pattern: dio_write asserts when dioBusControl falls while waiting
+    old_cyc <= dioBusControl;
+    if (~dioBusControl) dio_write <= ioctl_wait;
+    if (old_cyc & ~dioBusControl & dio_write) ioctl_wait <= 0;
 end
 
 
