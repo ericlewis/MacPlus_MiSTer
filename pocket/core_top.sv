@@ -182,8 +182,8 @@ always @(posedge clk_sys) begin
             dio_byte_hi <= dl_data;
             dio_byte_toggle <= 1;
         end else begin
-            // Mac ROM is big-endian: first byte = high byte
-            dio_data <= {dio_byte_hi, dl_data};
+            // Mac ROM byte swap (matching MiSTer's {ioctl_data[7:0], ioctl_data[15:8]})
+            dio_data <= {dl_data, dio_byte_hi};
             dio_a <= dl_addr[21:1]; // word address
             dio_write_word <= 1;
             dio_byte_toggle <= 0;
