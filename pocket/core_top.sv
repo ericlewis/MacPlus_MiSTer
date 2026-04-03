@@ -340,6 +340,20 @@ addrController_top ac0 (
     .dskReadAddrExt(dskReadAddrExt), .dskReadAckExt(dskReadAckExt)
 );
 
+// Dock keyboard → PS/2 (Player 3)
+wire [10:0] dock_ps2_key;
+usb_to_ps2 usb_kbd (
+    .clk(clk_sys), .cont3_key(cont3_key), .cont3_joy(cont3_joy),
+    .cont3_trig(cont3_trig), .ps2_key(dock_ps2_key)
+);
+
+// Dock mouse → PS/2 (Player 4)
+wire [24:0] dock_ps2_mouse;
+usb_to_ps2_mouse usb_mouse (
+    .clk(clk_sys), .cont4_key(cont4_key), .cont4_joy(cont4_joy),
+    .cont4_trig(cont4_trig), .ps2_mouse(dock_ps2_mouse)
+);
+
 // Data Controller (I/O hub: VIA, SCC, IWM, SCSI, keyboard, mouse, video, audio)
 wire [1:0] diskEject;
 wire [1:0] diskMotor, diskAct;
@@ -389,10 +403,10 @@ dataController_top #(SCSI_DEVS) dc0 (
     .memoryDataOut(memoryDataOut),
     .memoryDataIn(sdram_do),
     .memoryLatch(memoryLatch),
-    // Stub keyboard/mouse — TODO: map from gamepad
-    .ps2_key(11'd0),
+    // Dock keyboard (Player 3) and mouse (Player 4)
+    .ps2_key(dock_ps2_key),
     .capslock(),
-    .ps2_mouse(25'd0),
+    .ps2_mouse(dock_ps2_mouse),
     // Serial disabled
     .serialIn(1'b0), .serialOut(), .serialCTS(1'b0), .serialRTS(),
     // RTC
