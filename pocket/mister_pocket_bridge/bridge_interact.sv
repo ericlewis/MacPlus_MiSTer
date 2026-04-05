@@ -1,14 +1,13 @@
 //
 // bridge_interact.sv
 //
-// Analogue Pocket APF Bridge Registers → MiSTer status[] Bits
+// Analogue Pocket APF Bridge Registers -> MiSTer status[] Bits
 //
-// Maps APF bridge register writes at configurable addresses to
-// specific bit ranges within a 128-bit MiSTer-compatible status register.
+// Maps APF bridge register writes from the Pocket menu into the subset of
+// MiSTer-compatible status bits used by the Mac Plus core.
 //
-// Bridge registers are written from the Pocket OS (interact.json menu)
-// on the clk_74a domain. Values are synchronized to clk_sys for use
-// by the core.
+// Bridge registers are written from the Pocket OS (interact.json menu) on the
+// clk_74a domain. Values are synchronized to clk_sys for use by the core.
 //
 // Copyright (c) 2026 Eric Lewis
 // SPDX-License-Identifier: GPL-3.0-or-later
@@ -70,47 +69,20 @@ always @(posedge clk_sys) begin
 end
 
 //
-// Map registers to status bits.
-// This mapping is C64-specific but demonstrates the pattern.
-// For other cores, override this mapping.
+// Register layout used by the Pocket UI:
+//   0x00: [0]   Memory size  -> status[4]
+//   0x04: [0]   CPU speed    -> status[5]
+//   0x14: [1:0] CPU type     -> status[14:13]
 //
-// Register layout (each is a 32-bit bridge register at word offset):
-//   0x00: [0] = Video standard (PAL/NTSC)        → status[2]
-//   0x04: [0] = Swap joysticks                    → status[3]
-//   0x08: [1:0] = Aspect ratio                    → status[5:4]
-//   0x0C: [0] = Left SID model                    → status[13]
-//   0x10: [0] = Right SID model                   → status[16]
-//   0x14: [1:0] = System ROM selection             → status[15:14]
-//   0x18: [2:0] = Right SID port                  → status[22:20]
-//   0x1C: [1:0] = Stereo mix                      → status[19:18]
-//   0x20: [1:0] = VIC-II variant                  → status[35:34]
-//   0x24: [0] = 8580 digifix                      → status[37]
-//   0x28: [0] = CIA mode                          → status[45]
-//   0x2C: [1:0] = Turbo mode                      → status[47:46]
-//   0x30: [0] = OPL2 enable                       → status[12]
-//   0x34: [2:0] = Palette                         → status[84:82]
-//   0x38: [0] = Clear RAM on reset                → status[24]
-//   0x3C: [0] = Reset (directly usable)           → status[0]
+// Action registers such as Reset & Apply are handled as write toggles in the
+// top-level core rather than level-sensitive status bits.
 //
 always @(posedge clk_sys) begin
     status <= 128'd0;
 
-    status[2]      <= regs_sys[0][0];       // Video standard
-    status[3]      <= regs_sys[1][0];       // Swap joysticks
-    status[5:4]    <= regs_sys[2][1:0];     // Aspect ratio
-    status[13]     <= regs_sys[3][0];       // Left SID model
-    status[16]     <= regs_sys[4][0];       // Right SID model
-    status[15:14]  <= regs_sys[5][1:0];     // System ROM selection
-    status[22:20]  <= regs_sys[6][2:0];     // Right SID port
-    status[19:18]  <= regs_sys[7][1:0];     // Stereo mix
-    status[35:34]  <= regs_sys[8][1:0];     // VIC-II variant
-    status[37]     <= regs_sys[9][0];       // 8580 digifix
-    status[45]     <= regs_sys[10][0];      // CIA mode
-    status[47:46]  <= regs_sys[11][1:0];    // Turbo mode
-    status[12]     <= regs_sys[12][0];      // OPL2 enable
-    status[84:82]  <= regs_sys[13][2:0];    // Palette
-    status[24]     <= regs_sys[14][0];      // Clear RAM on reset
-    status[0]      <= regs_sys[15][0];      // Reset trigger
+    status[4]      <= regs_sys[0][0];       // Memory: 0 = 1MB, 1 = 4MB
+    status[5]      <= regs_sys[1][0];       // Speed: 0 = 8MHz, 1 = 16MHz
+    status[14:13]  <= regs_sys[5][1:0];     // CPU: 00 = 68000, 01 = 68010, 10 = 68020
 end
 
 endmodule

@@ -271,6 +271,7 @@ reg ioctl_wait = 0;
 reg eject_int_s0 = 0, eject_int_s1 = 0, eject_int_prev = 0;
 reg eject_ext_s0 = 0, eject_ext_s1 = 0, eject_ext_prev = 0;
 reg detach_hdd_s0 = 0, detach_hdd_s1 = 0, detach_hdd_prev = 0;
+reg apply_cfg_s0 = 0, apply_cfg_s1 = 0, apply_cfg_prev = 0;
 
 always @(posedge clk_sys) begin
     dl_s0 <= dl_downloading_74a;
@@ -292,6 +293,9 @@ always @(posedge clk_sys) begin
     detach_hdd_s0 <= detach_hdd_toggle_74a;
     detach_hdd_s1 <= detach_hdd_s0;
     detach_hdd_prev <= detach_hdd_s1;
+    apply_cfg_s0 <= apply_cfg_toggle_74a;
+    apply_cfg_s1 <= apply_cfg_s0;
+    apply_cfg_prev <= apply_cfg_s1;
 
     dl_active_prev <= dl_s1;
     if (dl_s1) dl_tail_hold <= 8'd96;
@@ -354,6 +358,7 @@ wire [127:0] status;
 reg       eject_int_toggle_74a = 0;
 reg       eject_ext_toggle_74a = 0;
 reg       detach_hdd_toggle_74a = 0;
+reg       apply_cfg_toggle_74a = 0;
 
 always @(posedge clk_74a) begin
     if (bridge_wr && (bridge_addr[31:24] == 8'h00)) begin
@@ -361,6 +366,7 @@ always @(posedge clk_74a) begin
             8'h08: eject_int_toggle_74a <= ~eject_int_toggle_74a;
             8'h0C: eject_ext_toggle_74a <= ~eject_ext_toggle_74a;
             8'h10: detach_hdd_toggle_74a <= ~detach_hdd_toggle_74a;
+            8'h18: apply_cfg_toggle_74a <= ~apply_cfg_toggle_74a;
         endcase
     end
 end
@@ -379,15 +385,15 @@ bridge_interact #(.NUM_REGS(16)) interact_bridge (
 always @(posedge clk_sys) begin
     reg [15:0] rst_cnt;
     if (clk8_en_p) begin
-        status_mem <= status[2];
-        status_cpu <= {1'b0, status[3]};
-        status_mod <= rom_is_se_s1;
-        if (~pll_core_locked || dio_download || ~_cpuReset_o) begin
+        if (~pll_core_locked || dio_download || (apply_cfg_s1 != apply_cfg_prev) || ~_cpuReset_o) begin
             rst_cnt <= '1;
             n_reset <= 0;
         end
         else if (rst_cnt) begin
             rst_cnt <= rst_cnt - 1'd1;
+            status_mem <= status[4];
+            status_cpu <= status[14:13];
+            status_mod <= rom_is_se_s1;
         end
         else begin
             n_reset <= 1;
@@ -438,7 +444,7 @@ end
 // ======== Mac Plus Core ========
 localparam configROMSize = 1'b1; // 128K ROM
 wire [1:0] configRAMSize = status_mem ? 2'b11 : 2'b10; // 1MB or 4MB
-wire       status_turbo = status_cpu[0];
+wire       status_turbo = status[5];
 
 // CPU signals
 wire clk8, _cpuReset, _cpuReset_o, _cpuUDS, _cpuLDS, _cpuRW, _cpuAS;
@@ -470,12 +476,26 @@ wire [10:0] mac_audio;
 wire dskReadAckInt, dskReadAckExt;
 wire [21:0] dskReadAddrInt, dskReadAddrExt;
 
-// CPU selection: FX68K only
-wire cpu_en_p = clk8_en_p;
-wire cpu_en_n = clk8_en_n;
+// DTACK generation in turbo mode matches MiSTer.
+reg turbo_dtack_en = 0, cpuBusControl_d = 0;
+always @(posedge clk_sys) begin
+    if (!_cpuReset) begin
+        turbo_dtack_en <= 0;
+    end
+    else begin
+        cpuBusControl_d <= cpuBusControl;
+        if (_cpuAS) turbo_dtack_en <= 0;
+        if (!_cpuAS & ((!cpuBusControl_d & cpuBusControl) | (!selectROM & !selectRAM)))
+            turbo_dtack_en <= 1;
+    end
+end
 
 assign _cpuVPA   = (cpuFC == 3'b111) ? 1'b0 : ~(!_cpuAS && cpuAddr[23:21] == 3'b111);
-assign _cpuDTACK = ~(!_cpuAS && cpuAddr[23:21] != 3'b111);
+assign _cpuDTACK = ~(!_cpuAS && cpuAddr[23:21] != 3'b111) | (status_turbo & !turbo_dtack_en);
+
+wire cpu_en_p = status_turbo ? clk16_en_p : clk8_en_p;
+wire cpu_en_n = status_turbo ? clk16_en_n : clk8_en_n;
+wire is68000  = status_cpu == 0;
 
 wire [15:0] fx68_dout;
 wire [23:1] fx68_a;
@@ -483,19 +503,27 @@ wire        fx68_rw, fx68_as_n, fx68_uds_n, fx68_lds_n;
 wire        fx68_E_falling, fx68_E_rising, fx68_vma_n;
 wire        fx68_fc0, fx68_fc1, fx68_fc2;
 wire        fx68_reset_n;
+wire [15:0] tg68_dout;
+wire [31:0] tg68_a;
+wire        tg68_rw, tg68_as_n, tg68_uds_n, tg68_lds_n;
+wire        tg68_E_rising, tg68_E_falling, tg68_vma_n;
+wire        tg68_fc0, tg68_fc1, tg68_fc2;
+wire        tg68_reset_n;
 
-assign _cpuReset_o = fx68_reset_n;
-assign _cpuRW      = fx68_rw;
-assign _cpuAS      = fx68_as_n;
-assign _cpuUDS     = fx68_uds_n;
-assign _cpuLDS     = fx68_lds_n;
-assign E_falling   = fx68_E_falling;
-assign E_rising    = fx68_E_rising;
-assign _cpuVMA     = fx68_vma_n;
-assign cpuFC       = {fx68_fc2, fx68_fc1, fx68_fc0};
-assign cpuAddr[23:1] = fx68_a;
-assign cpuAddr[0]  = 0;
-assign cpuDataOut  = fx68_dout;
+assign _cpuReset_o   = is68000 ? fx68_reset_n : tg68_reset_n;
+assign _cpuRW        = is68000 ? fx68_rw : tg68_rw;
+assign _cpuAS        = is68000 ? fx68_as_n : tg68_as_n;
+assign _cpuUDS       = is68000 ? fx68_uds_n : tg68_uds_n;
+assign _cpuLDS       = is68000 ? fx68_lds_n : tg68_lds_n;
+assign E_falling     = is68000 ? fx68_E_falling : tg68_E_falling;
+assign E_rising      = is68000 ? fx68_E_rising : tg68_E_rising;
+assign _cpuVMA       = is68000 ? fx68_vma_n : tg68_vma_n;
+assign cpuFC[0]      = is68000 ? fx68_fc0 : tg68_fc0;
+assign cpuFC[1]      = is68000 ? fx68_fc1 : tg68_fc1;
+assign cpuFC[2]      = is68000 ? fx68_fc2 : tg68_fc2;
+assign cpuAddr[23:1] = is68000 ? fx68_a : tg68_a[23:1];
+assign cpuAddr[0]    = 0;
+assign cpuDataOut    = is68000 ? fx68_dout : tg68_dout;
 
 fx68k fx68k_inst (
     .clk       (clk_sys),
@@ -530,6 +558,35 @@ fx68k fx68k_inst (
     .iEdb      (dataControllerDataOut),
     .oEdb      (fx68_dout),
     .eab       (fx68_a)
+);
+
+tg68k tg68k_inst (
+    .clk       (clk_sys),
+    .reset     (!_cpuReset),
+    .phi1      (cpu_en_p),
+    .phi2      (cpu_en_n),
+    .cpu       ({status_cpu[1], |status_cpu}),
+    .dtack_n   (_cpuDTACK),
+    .rw_n      (tg68_rw),
+    .as_n      (tg68_as_n),
+    .uds_n     (tg68_uds_n),
+    .lds_n     (tg68_lds_n),
+    .fc        ({tg68_fc2, tg68_fc1, tg68_fc0}),
+    .reset_n   (tg68_reset_n),
+    .E         (),
+    .E_div     (status_turbo),
+    .E_PosClkEn(tg68_E_falling),
+    .E_NegClkEn(tg68_E_rising),
+    .vma_n     (tg68_vma_n),
+    .vpa_n     (_cpuVPA),
+    .br_n      (1'b1),
+    .bg_n      (),
+    .bgack_n   (1'b1),
+    .ipl       (_cpuIPL),
+    .berr      (1'b0),
+    .din       (dataControllerDataOut),
+    .dout      (tg68_dout),
+    .addr      (tg68_a)
 );
 
 // Address Controller

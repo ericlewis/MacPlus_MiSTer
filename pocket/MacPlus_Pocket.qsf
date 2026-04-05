@@ -750,6 +750,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE mister_pocket_bridge/bridge_inter
 set_global_assignment -name SYSTEMVERILOG_FILE usb_to_ps2.sv
 set_global_assignment -name SYSTEMVERILOG_FILE usb_to_ps2_mouse.sv
 # Mac Plus RTL
+set_global_assignment -name QIP_FILE ../rtl/tg68k/TG68K.qip
 set_global_assignment -name QIP_FILE ../rtl/fx68k/fx68k.qip
 set_global_assignment -name VERILOG_FILE ../rtl/sdram.v
 set_global_assignment -name VERILOG_FILE ../rtl/scsi.v

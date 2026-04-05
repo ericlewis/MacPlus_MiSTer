@@ -30,6 +30,28 @@
       },
       {
         "id": "0x02",
+        "name": "CPU Type",
+        "type": "list",
+        "address": "0x00000014",
+        "defaultval": "0x00",
+        "options": [
+          { "value": "0x00", "name": "68000" },
+          { "value": "0x01", "name": "68010" },
+          { "value": "0x02", "name": "68020" }
+        ],
+        "enabled": true,
+        "persist": true
+      },
+      {
+        "id": "0x03",
+        "name": "Reset & Apply CPU+Memory",
+        "type": "action",
+        "address": "0x00000018",
+        "value": 1,
+        "enabled": true
+      },
+      {
+        "id": "0x04",
         "name": "Eject Internal Floppy",
         "type": "action",
         "address": "0x00000008",
@@ -37,7 +59,7 @@
         "enabled": true
       },
       {
-        "id": "0x03",
+        "id": "0x05",
         "name": "Eject External Floppy",
         "type": "action",
         "address": "0x0000000C",
@@ -45,7 +67,7 @@
         "enabled": true
       },
       {
-        "id": "0x04",
+        "id": "0x06",
         "name": "Detach Hard Disk",
         "type": "action",
         "address": "0x00000010",
