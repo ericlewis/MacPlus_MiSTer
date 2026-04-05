@@ -69,8 +69,10 @@ assign dbg_tx=1'bZ; assign user1=1'bZ; assign aux_scl=1'bZ; assign vpll_feed=1'b
 // ======== Bridge ========
 wire [31:0] cmd_bridge_rd_data;
 wire [31:0] hdd_bridge_rd_data;
+wire [31:0] interact_bridge_rd_data;
 always @(*) begin
     casex(bridge_addr)
+    32'h00xxxxxx: bridge_rd_data <= interact_bridge_rd_data;
     32'h200xxxxx: bridge_rd_data <= hdd_bridge_rd_data;
     32'hF8xxxxxx: bridge_rd_data <= cmd_bridge_rd_data;
     default:      bridge_rd_data <= 0;
@@ -327,10 +329,24 @@ reg       n_reset = 0;
 reg [1:0] status_cpu = 0;
 reg       status_mem = 0; // 0=1MB, 1=4MB
 reg       status_mod = 0; // 0=Plus, 1=SE
+wire [127:0] status;
+
+bridge_interact #(.NUM_REGS(4)) interact_bridge (
+    .clk_74a        (clk_74a),
+    .clk_sys        (clk_sys),
+    .bridge_addr    (bridge_addr),
+    .bridge_wr      (bridge_wr & (bridge_addr[31:24] == 8'h00)),
+    .bridge_wr_data (bridge_wr_data),
+    .bridge_rd      (bridge_rd & (bridge_addr[31:24] == 8'h00)),
+    .bridge_rd_data (interact_bridge_rd_data),
+    .status         (status)
+);
 
 always @(posedge clk_sys) begin
     reg [15:0] rst_cnt;
     if (clk8_en_p) begin
+        status_mem <= status[0];
+        status_cpu <= {1'b0, status[1]};
         status_mod <= rom_is_se_s1;
         if (~pll_core_locked || dio_download || ~_cpuReset_o) begin
             rst_cnt <= '1;
@@ -380,7 +396,7 @@ end
 // ======== Mac Plus Core ========
 localparam configROMSize = 1'b1; // 128K ROM
 wire [1:0] configRAMSize = status_mem ? 2'b11 : 2'b10; // 1MB or 4MB
-wire       status_turbo = 0; // no turbo for now
+wire       status_turbo = status_cpu[0];
 
 // CPU signals
 wire clk8, _cpuReset, _cpuReset_o, _cpuUDS, _cpuLDS, _cpuRW, _cpuAS;

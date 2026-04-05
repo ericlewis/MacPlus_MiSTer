@@ -1,1 +1,33 @@
-{"interact":{"magic":"APF_VER_1","variables":[]}}
+{
+  "interact": {
+    "magic": "APF_VER_1",
+    "variables": [
+      {
+        "id": "0x00",
+        "name": "Memory Size",
+        "type": "list",
+        "address": "0x00000000",
+        "defaultval": "0x00",
+        "options": [
+          { "value": "0x00", "name": "1 MB" },
+          { "value": "0x01", "name": "4 MB" }
+        ],
+        "enabled": true,
+        "persist": true
+      },
+      {
+        "id": "0x01",
+        "name": "CPU Speed",
+        "type": "list",
+        "address": "0x00000004",
+        "defaultval": "0x00",
+        "options": [
+          { "value": "0x00", "name": "8 MHz" },
+          { "value": "0x01", "name": "16 MHz" }
+        ],
+        "enabled": true,
+        "persist": true
+      }
+    ]
+  }
+}
