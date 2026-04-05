@@ -563,7 +563,7 @@ always @(posedge clk_sys) begin
             hdd_byte_lo <= hdd_dl_data;
             hdd_byte_toggle <= 1;
         end else begin
-            sd_buff_addr_s <= hdd_rx_count[9:1];
+            sd_buff_addr_s <= hdd_rx_count[8:1];
             sd_buff_dout_s <= {hdd_dl_data, hdd_byte_lo};
             sd_buff_wr_s <= 1;
             hdd_byte_toggle <= 0;
