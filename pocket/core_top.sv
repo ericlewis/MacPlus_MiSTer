@@ -206,7 +206,8 @@ always @(posedge clk_sys) begin
             dio_byte_hi <= dl_data;
             dio_byte_toggle <= 1;
         end else begin
-            dio_fifo[dio_fifo_wr] <= {dl_addr[21:1], dl_data, dio_byte_hi};
+            // Mac ROM is big-endian: the first byte at an even address is the word's high byte.
+            dio_fifo[dio_fifo_wr] <= {dl_addr[21:1], dio_byte_hi, dl_data};
             dio_fifo_wr <= dio_fifo_wr + 1'd1;
             dio_byte_toggle <= 0;
         end
