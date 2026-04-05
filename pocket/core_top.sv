@@ -68,8 +68,10 @@ assign dbg_tx=1'bZ; assign user1=1'bZ; assign aux_scl=1'bZ; assign vpll_feed=1'b
 
 // ======== Bridge ========
 wire [31:0] cmd_bridge_rd_data;
+wire [31:0] hdd_bridge_rd_data;
 always @(*) begin
     casex(bridge_addr)
+    32'h200xxxxx: bridge_rd_data <= hdd_bridge_rd_data;
     32'hF8xxxxxx: bridge_rd_data <= cmd_bridge_rd_data;
     default:      bridge_rd_data <= 0;
     endcase
@@ -540,16 +542,27 @@ reg sd_buff_wr_s = 0;
 wire [SCSI_DEVS-1:0] img_mounted_s = {1'b0, |hdd_file_size_s1};
 wire [31:0] img_size_s = hdd_file_size_s1[31:9];
 
-localparam HDS_IDLE = 2'd0;
-localparam HDS_WAIT_ACK = 2'd1;
-localparam HDS_FILL = 2'd2;
-localparam HDS_DONE = 2'd3;
-localparam HDS_ERROR = 2'd4;
+localparam HDS_IDLE       = 3'd0;
+localparam HDS_WAIT_ACK   = 3'd1;
+localparam HDS_FILL       = 3'd2;
+localparam HDS_DONE       = 3'd3;
+localparam HDS_ERROR      = 3'd4;
+localparam HDS_WRITE_PREP = 3'd5;
+localparam HDS_WRITE_COPY = 3'd6;
+localparam HDS_WRITE_WAIT = 3'd7;
 
 reg [2:0] hdd_state = HDS_IDLE;
 reg [9:0] hdd_rx_count = 0;
 reg [7:0] hdd_byte_lo = 0;
 reg       hdd_byte_toggle = 0;
+reg [7:0] hdd_copy_idx = 0;
+reg       hdd_copy_primed = 0;
+reg [15:0] hdd_copy_lo = 0;
+(* ramstyle = "M10K, no_rw_check" *) reg [31:0] hdd_tx_buf [0:127];
+
+wire [6:0] hdd_bridge_word = bridge_addr[8:2];
+wire       hdd_bridge_sel = (bridge_addr[31:9] == HDD_BUFFER_BASE[31:9]);
+assign hdd_bridge_rd_data = hdd_bridge_sel ? hdd_tx_buf[hdd_bridge_word] : 32'd0;
 
 always @(posedge clk_sys) begin
     sd_ack_s <= 0;
@@ -586,8 +599,7 @@ always @(posedge clk_sys) begin
                 target_req_sys <= 1;
                 hdd_state <= HDS_WAIT_ACK;
             end else if (sd_wr_s[0] && img_mounted_s[0]) begin
-                // First pass: acknowledge writes without persisting them.
-                hdd_state <= HDS_DONE;
+                hdd_state <= HDS_WRITE_PREP;
             end
         end
 
@@ -615,6 +627,47 @@ always @(posedge clk_sys) begin
         HDS_ERROR: begin
             if (!sd_rd_s[0] && !sd_wr_s[0])
                 hdd_state <= HDS_IDLE;
+        end
+
+        HDS_WRITE_PREP: begin
+            hdd_copy_idx <= 0;
+            hdd_copy_primed <= 0;
+            sd_buff_addr_s <= 0;
+            hdd_state <= HDS_WRITE_COPY;
+        end
+
+        HDS_WRITE_COPY: begin
+            if (!hdd_copy_primed) begin
+                hdd_copy_primed <= 1;
+                sd_buff_addr_s <= 0;
+            end else begin
+                if (!hdd_copy_idx[0]) begin
+                    hdd_copy_lo <= sd_buff_din_s[0];
+                end else begin
+                    hdd_tx_buf[hdd_copy_idx[7:1]] <= {sd_buff_din_s[0], hdd_copy_lo};
+                end
+
+                if (hdd_copy_idx == 8'hFF) begin
+                    target_req_type_sys <= TARGET_REQ_WRITE;
+                    target_req_id_sys <= SLOT_HDD;
+                    target_req_slotoffset_sys <= sd_lba_s[0] << 9;
+                    target_req_bridgeaddr_sys <= HDD_BUFFER_BASE;
+                    target_req_length_sys <= 32'd512;
+                    target_req_sys <= 1;
+                    hdd_state <= HDS_WRITE_WAIT;
+                end else begin
+                    hdd_copy_idx <= hdd_copy_idx + 1'd1;
+                    sd_buff_addr_s <= hdd_copy_idx + 1'd1;
+                end
+            end
+        end
+
+        HDS_WRITE_WAIT: begin
+            if (target_dataslot_done_sys && target_dataslot_err_sys == 0) begin
+                hdd_state <= HDS_DONE;
+            end else if (target_dataslot_done_sys && target_dataslot_err_sys != 0) begin
+                hdd_state <= HDS_ERROR;
+            end
         end
     endcase
 end
