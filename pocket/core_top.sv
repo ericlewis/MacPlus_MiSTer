@@ -268,6 +268,9 @@ reg dl_active_prev = 0;
 reg [7:0] dl_tail_hold = 0;
 reg dio_write = 0;
 reg ioctl_wait = 0;
+reg eject_int_s0 = 0, eject_int_s1 = 0, eject_int_prev = 0;
+reg eject_ext_s0 = 0, eject_ext_s1 = 0, eject_ext_prev = 0;
+reg detach_hdd_s0 = 0, detach_hdd_s1 = 0, detach_hdd_prev = 0;
 
 always @(posedge clk_sys) begin
     dl_s0 <= dl_downloading_74a;
@@ -280,11 +283,29 @@ always @(posedge clk_sys) begin
     dl_slot_size_s1 <= dl_slot_size_s0;
     hdd_file_size_s0 <= hdd_file_size_74a;
     hdd_file_size_s1 <= hdd_file_size_s0;
+    eject_int_s0 <= eject_int_toggle_74a;
+    eject_int_s1 <= eject_int_s0;
+    eject_int_prev <= eject_int_s1;
+    eject_ext_s0 <= eject_ext_toggle_74a;
+    eject_ext_s1 <= eject_ext_s0;
+    eject_ext_prev <= eject_ext_s1;
+    detach_hdd_s0 <= detach_hdd_toggle_74a;
+    detach_hdd_s1 <= detach_hdd_s0;
+    detach_hdd_prev <= detach_hdd_s1;
 
     dl_active_prev <= dl_s1;
     if (dl_s1) dl_tail_hold <= 8'd96;
     else if (dl_active_prev) dl_tail_hold <= 8'd96;
     else if (dl_tail_hold != 0) dl_tail_hold <= dl_tail_hold - 1'd1;
+end
+reg hdd_attached_s1 = 0;
+reg hdd_present_prev = 0;
+always @(posedge clk_sys) begin
+    hdd_present_prev <= |hdd_file_size_s1;
+    if (~hdd_present_prev && |hdd_file_size_s1)
+        hdd_attached_s1 <= 1;
+    if (detach_hdd_s1 != detach_hdd_prev)
+        hdd_attached_s1 <= 0;
 end
 
 wire dl_active = dl_s1;
@@ -330,6 +351,19 @@ reg [1:0] status_cpu = 0;
 reg       status_mem = 0; // 0=1MB, 1=4MB
 reg       status_mod = 0; // 0=Plus, 1=SE
 wire [127:0] status;
+reg       eject_int_toggle_74a = 0;
+reg       eject_ext_toggle_74a = 0;
+reg       detach_hdd_toggle_74a = 0;
+
+always @(posedge clk_74a) begin
+    if (bridge_wr && (bridge_addr[31:24] == 8'h00)) begin
+        case (bridge_addr[7:0])
+            8'h08: eject_int_toggle_74a <= ~eject_int_toggle_74a;
+            8'h0C: eject_ext_toggle_74a <= ~eject_ext_toggle_74a;
+            8'h10: detach_hdd_toggle_74a <= ~detach_hdd_toggle_74a;
+        endcase
+    end
+end
 
 bridge_interact #(.NUM_REGS(4)) interact_bridge (
     .clk_74a        (clk_74a),
@@ -345,8 +379,8 @@ bridge_interact #(.NUM_REGS(4)) interact_bridge (
 always @(posedge clk_sys) begin
     reg [15:0] rst_cnt;
     if (clk8_en_p) begin
-        status_mem <= status[0];
-        status_cpu <= {1'b0, status[1]};
+        status_mem <= status[2];
+        status_cpu <= {1'b0, status[3]};
         status_mod <= rom_is_se_s1;
         if (~pll_core_locked || dio_download || ~_cpuReset_o) begin
             rst_cnt <= '1;
@@ -386,8 +420,16 @@ always @(posedge clk_sys) begin
         dsk_int_ds <= 0;
         dsk_int_ss <= 0;
     end
+    if (eject_int_s1 != eject_int_prev) begin
+        dsk_int_ds <= 0;
+        dsk_int_ss <= 0;
+    end
 
     if (diskEject[1]) begin
+        dsk_ext_ds <= 0;
+        dsk_ext_ss <= 0;
+    end
+    if (eject_ext_s1 != eject_ext_prev) begin
         dsk_ext_ds <= 0;
         dsk_ext_ss <= 0;
     end
@@ -555,7 +597,7 @@ reg  [7:0] sd_buff_addr_s = 0;
 reg [15:0] sd_buff_dout_s = 0;
 wire [15:0] sd_buff_din_s [SCSI_DEVS];
 reg sd_buff_wr_s = 0;
-wire [SCSI_DEVS-1:0] img_mounted_s = {1'b0, |hdd_file_size_s1};
+wire [SCSI_DEVS-1:0] img_mounted_s = {1'b0, hdd_attached_s1 && |hdd_file_size_s1};
 wire [31:0] img_size_s = hdd_file_size_s1[31:9];
 
 localparam HDS_IDLE       = 3'd0;

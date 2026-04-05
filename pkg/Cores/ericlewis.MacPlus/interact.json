@@ -27,6 +27,30 @@
         ],
         "enabled": true,
         "persist": true
+      },
+      {
+        "id": "0x02",
+        "name": "Eject Internal Floppy",
+        "type": "action",
+        "address": "0x00000008",
+        "value": 1,
+        "enabled": true
+      },
+      {
+        "id": "0x03",
+        "name": "Eject External Floppy",
+        "type": "action",
+        "address": "0x0000000C",
+        "value": 1,
+        "enabled": true
+      },
+      {
+        "id": "0x04",
+        "name": "Detach Hard Disk",
+        "type": "action",
+        "address": "0x00000010",
+        "value": 1,
+        "enabled": true
       }
     ]
   }
