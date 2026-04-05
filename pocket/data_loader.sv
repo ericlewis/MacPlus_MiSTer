@@ -155,18 +155,18 @@ module data_loader #(
 
   reg [5:0] read_state = 0;
 
-  localparam READ_DELAY = 1;
-  localparam READ_WRITE = 2;
-  localparam READ_WRITE_EN_CYCLE_OFF = READ_WRITE + WRITE_MEM_EN_CYCLE_LENGTH;
-  localparam READ_WRITE_END_DEFAULT = WRITE_MEM_CLOCK_DELAY - 1;
+  localparam [5:0] READ_DELAY = 6'd1;
+  localparam [5:0] READ_WRITE = 6'd2;
+  localparam [5:0] READ_WRITE_EN_CYCLE_OFF = READ_WRITE + WRITE_MEM_EN_CYCLE_LENGTH;
+  localparam [5:0] READ_WRITE_END_DEFAULT = WRITE_MEM_CLOCK_DELAY - 1;
   // Must use max to prevent READ_WRITE_END from being the same as READ_WRITE_EN_CYCLE_OFF
-  localparam READ_WRITE_END =
+  localparam [5:0] READ_WRITE_END =
   `MAX(READ_WRITE_END_DEFAULT, READ_WRITE_EN_CYCLE_OFF + 1);
   localparam HAS_DELAY = READ_WRITE_END_DEFAULT > READ_WRITE_EN_CYCLE_OFF;
 
   always @(posedge clk_memory) begin
     if (read_state != 0) begin
-      read_state <= read_state + 1;
+      read_state <= read_state + 1'd1;
     end else if (~mem_empty) begin
       // Start read
       read_state <= READ_DELAY;
@@ -183,7 +183,7 @@ module data_loader #(
         write_en   <= 1;
 
         // Lowest 28 bits are the address
-        write_addr <= fifo_out[27:0];
+        write_addr <= fifo_out[ADDRESS_SIZE-1:0];
 
         write_data <= fifo_out[WORD_SIZE+27:28];
 

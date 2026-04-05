@@ -365,7 +365,7 @@ always @(posedge clk_74a) begin
     end
 end
 
-bridge_interact #(.NUM_REGS(4)) interact_bridge (
+bridge_interact #(.NUM_REGS(16)) interact_bridge (
     .clk_74a        (clk_74a),
     .clk_sys        (clk_sys),
     .bridge_addr    (bridge_addr),
