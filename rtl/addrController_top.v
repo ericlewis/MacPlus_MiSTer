@@ -1,4 +1,6 @@
-module addrController_top(
+module addrController_top #(
+	parameter VIDEO_VERTICAL_DOUBLE = 1'b1
+)(
 	// clocks:
 	input clk,
 	output clk8,						// 8.125 MHz CPU clock
@@ -201,7 +203,9 @@ module addrController_top(
 		.selectSEOverlay(selectSEOverlay));
 
 	// video
-	videoTimer vt(
+	videoTimer #(
+		.VERTICAL_DOUBLE(VIDEO_VERTICAL_DOUBLE)
+	) vt(
 		.clk(clk),
 		.clk_en(clk8_en_p),
 		.busCycle(busCycle), 

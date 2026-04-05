@@ -1,5 +1,7 @@
 // generates 1024x768 (actually 512x768) @ 60Hz, from a 32.5MHz input clock
-module videoTimer(
+module videoTimer #(
+	parameter VERTICAL_DOUBLE = 1'b1
+)(
 	input clk,
 	input clk_en,
 	input [1:0] busCycle,
@@ -16,7 +18,7 @@ module videoTimer(
 	localparam 	kVisibleWidth = 128, // (1024/2)/4
 					kTotalWidth = 168, // (1344/2)/4
 					kVisibleHeightStart = 42,
-					kVisibleHeightEnd = 725,
+					kVisibleHeightEnd = kVisibleHeightStart + (VERTICAL_DOUBLE ? 684 : 342) - 1,
 					kTotalHeight = 806,
 					kHsyncStart = 131, // (1048/2)/4
 					kHsyncEnd = 147, // (1184/2)/4-1
@@ -27,10 +29,11 @@ module videoTimer(
 	// use screen buffer address for a 4MB RAM layout-- it will wrap
 	// around to the proper address for 1MB, 512K, and 128K layouts
 	localparam kScreenBufferBase = 22'h3FA700;
-	localparam startAddr = kVisibleHeightStart/2 * kVisibleWidth/2;
+	localparam startAddr = (VERTICAL_DOUBLE ? (kVisibleHeightStart/2) : kVisibleHeightStart) * kVisibleWidth/2;
 	
 	reg [7:0] xpos;
 	reg [9:0] ypos;
+	wire [8:0] src_y = VERTICAL_DOUBLE ? ypos[9:1] : ypos[8:0];
 
 	wire endline = (xpos == kTotalWidth-1);
 
@@ -69,12 +72,12 @@ module videoTimer(
 	
 	// The 0,0 address actually starts below kScreenBufferBase, because the Mac screen buffer is
 	// not displayed beginning at 0,0, but at 0,kVisibleHeightStart.
-	// kVisibleHeightStart divided by 2 to account for vertical pixel doubling.
+	// kVisibleHeightStart is divided by 2 when vertical pixel doubling is enabled.
 	// kVisibleWidth divided by 2 because it's the 8MHz visible width times 4 to get actual number of pixels, 
 	// 	then divided by 8 bits per byte	
 	assign videoAddr = kScreenBufferBase - (vid_alt ? 16'h0 : 16'h8000) -
 							 startAddr[21:0] +
-							 { ypos[9:1], xpos[6:2], 1'b0 };
+							 { src_y, xpos[6:2], 1'b0 };
 	
 	assign loadPixels = _vblank == 1'b1 && _hblank == 1'b1 && busCycle == 2'b00;
 	
