@@ -505,12 +505,19 @@ usb_to_ps2 usb_kbd (
     .cont3_trig(cont3_trig), .ps2_key(dock_ps2_key)
 );
 
-// Dock mouse → PS/2 (Player 4)
+// Mouse input: controller 1 d-pad emulation, overridden by dock mouse on Player 4.
+wire [24:0] pad_ps2_mouse;
+pad_to_ps2_mouse pad_mouse (
+    .clk(clk_sys), .cont1_key(cont1_key), .ps2_mouse(pad_ps2_mouse)
+);
+
+wire dock_mouse_present = (cont4_key[31:28] == 4'h5);
 wire [24:0] dock_ps2_mouse;
 usb_to_ps2_mouse usb_mouse (
     .clk(clk_sys), .cont4_key(cont4_key), .cont4_joy(cont4_joy),
     .cont4_trig(cont4_trig), .ps2_mouse(dock_ps2_mouse)
 );
+wire [24:0] active_ps2_mouse = dock_mouse_present ? dock_ps2_mouse : pad_ps2_mouse;
 
 // Data Controller (I/O hub: VIA, SCC, IWM, SCSI, keyboard, mouse, video, audio)
 wire [1:0] diskEject;
@@ -626,7 +633,7 @@ dataController_top #(SCSI_DEVS) dc0 (
     // Dock keyboard (Player 3) and mouse (Player 4)
     .ps2_key(dock_ps2_key),
     .capslock(),
-    .ps2_mouse(dock_ps2_mouse),
+    .ps2_mouse(active_ps2_mouse),
     // Serial disabled
     .serialIn(1'b0), .serialOut(), .serialCTS(1'b0), .serialRTS(),
     // RTC
