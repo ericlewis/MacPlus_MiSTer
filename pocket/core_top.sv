@@ -543,9 +543,10 @@ wire [31:0] img_size_s = hdd_file_size_s1[31:9];
 localparam HDS_IDLE = 2'd0;
 localparam HDS_WAIT_ACK = 2'd1;
 localparam HDS_FILL = 2'd2;
-localparam HDS_ERROR = 2'd3;
+localparam HDS_DONE = 2'd3;
+localparam HDS_ERROR = 2'd4;
 
-reg [1:0] hdd_state = HDS_IDLE;
+reg [2:0] hdd_state = HDS_IDLE;
 reg [9:0] hdd_rx_count = 0;
 reg [7:0] hdd_byte_lo = 0;
 reg       hdd_byte_toggle = 0;
@@ -586,7 +587,7 @@ always @(posedge clk_sys) begin
                 hdd_state <= HDS_WAIT_ACK;
             end else if (sd_wr_s[0] && img_mounted_s[0]) begin
                 // First pass: acknowledge writes without persisting them.
-                sd_ack_s[0] <= 1'b1;
+                hdd_state <= HDS_DONE;
             end
         end
 
@@ -599,15 +600,20 @@ always @(posedge clk_sys) begin
 
         HDS_FILL: begin
             if (hdd_rx_count == 10'd512 && !hdd_byte_toggle) begin
-                sd_ack_s[0] <= 1'b1;
-                hdd_state <= HDS_IDLE;
+                hdd_state <= HDS_DONE;
             end else if (target_dataslot_done_sys && target_dataslot_err_sys != 0) begin
                 hdd_state <= HDS_ERROR;
             end
         end
 
+        HDS_DONE: begin
+            sd_ack_s[0] <= 1'b1;
+            if (!sd_rd_s[0] && !sd_wr_s[0])
+                hdd_state <= HDS_IDLE;
+        end
+
         HDS_ERROR: begin
-            if (!sd_rd_s[0])
+            if (!sd_rd_s[0] && !sd_wr_s[0])
                 hdd_state <= HDS_IDLE;
         end
     endcase
