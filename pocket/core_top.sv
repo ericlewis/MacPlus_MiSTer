@@ -119,7 +119,11 @@ wire [31:0] target_buffer_resp_struct = target_req_bridgeaddr_74a;
 wire target_dataslot_ack_sys;
 wire target_dataslot_done_sys;
 wire [2:0] target_dataslot_err_sys;
-wire [9:0] datatable_addr; wire datatable_wren; wire [31:0] datatable_data, datatable_q;
+localparam [9:0] HDD_SIZE_DATATABLE_ADDR = 10'd7;
+reg  [9:0] datatable_addr = 0;
+wire [31:0] datatable_q;
+wire        datatable_wren = 1'b0;
+wire [31:0] datatable_data = 32'd0;
 
 synch_3 #(
     .WIDTH(115)
@@ -237,6 +241,8 @@ reg [7:0]  dl_slot_id_74a = SLOT_ROM;
 reg [31:0] dl_slot_size_74a = 0;
 reg [31:0] hdd_file_size_74a = 0;
 always @(posedge clk_74a) begin
+    datatable_addr <= HDD_SIZE_DATATABLE_ADDR;
+
     if (dataslot_requestwrite) begin
         dl_downloading_74a <= 1;
         dl_slot_id_74a <= dataslot_requestwrite_id[7:0];
@@ -246,8 +252,7 @@ always @(posedge clk_74a) begin
     end
     else if (dataslot_allcomplete) dl_downloading_74a <= 0;
 
-    if (dataslot_update && dataslot_update_id[7:0] == SLOT_HDD)
-        hdd_file_size_74a <= dataslot_update_size;
+    hdd_file_size_74a <= datatable_q;
 end
 
 reg dl_s0 = 0, dl_s1 = 0;
