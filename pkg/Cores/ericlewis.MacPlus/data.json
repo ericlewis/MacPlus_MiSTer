@@ -10,6 +10,24 @@
         "size_maximum": "0x40000",
         "extensions": ["rom", "bin"],
         "address": "0x10000000"
+      },
+      {
+        "id": 1,
+        "name": "Internal Floppy",
+        "required": false,
+        "parameters": "0x1",
+        "size_maximum": "0x0C8000",
+        "extensions": ["dsk"],
+        "address": "0x10000000"
+      },
+      {
+        "id": 2,
+        "name": "External Floppy",
+        "required": false,
+        "parameters": "0x1",
+        "size_maximum": "0x0C8000",
+        "extensions": ["dsk"],
+        "address": "0x10000000"
       }
     ]
   }

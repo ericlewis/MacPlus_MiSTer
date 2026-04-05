@@ -139,6 +139,10 @@ pll pll_inst(
 // ======== ROM Loading ========
 // Slot 0: Mac ROM (128KB or 256KB) loaded at 0x10000000
 // Pace the bridge output so the Mac DIO slot can keep up.
+localparam [7:0] SLOT_ROM       = 8'd0;
+localparam [7:0] SLOT_FLOPPY_INT = 8'd1;
+localparam [7:0] SLOT_FLOPPY_EXT = 8'd2;
+
 wire        dl_wr;
 wire [27:0] dl_addr;
 wire [7:0]  dl_data;
@@ -159,16 +163,23 @@ data_loader #(
 // Download tracking and ROM mode selection.
 reg dl_downloading_74a = 0;
 reg rom_is_se_74a = 0;
+reg [7:0]  dl_slot_id_74a = SLOT_ROM;
+reg [31:0] dl_slot_size_74a = 0;
 always @(posedge clk_74a) begin
     if (dataslot_requestwrite) begin
         dl_downloading_74a <= 1;
-        rom_is_se_74a <= (dataslot_requestwrite_size > 32'd131072);
+        dl_slot_id_74a <= dataslot_requestwrite_id[7:0];
+        dl_slot_size_74a <= dataslot_requestwrite_size;
+        if (dataslot_requestwrite_id[7:0] == SLOT_ROM)
+            rom_is_se_74a <= (dataslot_requestwrite_size > 32'd131072);
     end
     else if (dataslot_allcomplete) dl_downloading_74a <= 0;
 end
 
 reg dl_s0 = 0, dl_s1 = 0;
 reg rom_is_se_s0 = 0, rom_is_se_s1 = 0;
+reg [7:0] dl_slot_id_s0 = SLOT_ROM, dl_slot_id_s1 = SLOT_ROM;
+reg [31:0] dl_slot_size_s0 = 0, dl_slot_size_s1 = 0;
 reg dl_active_prev = 0;
 reg [7:0] dl_tail_hold = 0;
 reg dio_write = 0;
@@ -179,6 +190,10 @@ always @(posedge clk_sys) begin
     dl_s1 <= dl_s0;
     rom_is_se_s0 <= rom_is_se_74a;
     rom_is_se_s1 <= rom_is_se_s0;
+    dl_slot_id_s0 <= dl_slot_id_74a;
+    dl_slot_id_s1 <= dl_slot_id_s0;
+    dl_slot_size_s0 <= dl_slot_size_74a;
+    dl_slot_size_s1 <= dl_slot_size_s0;
 
     dl_active_prev <= dl_s1;
     if (dl_s1) dl_tail_hold <= 8'd96;
@@ -187,12 +202,15 @@ always @(posedge clk_sys) begin
 end
 
 wire dl_active = dl_s1;
+wire [20:0] dl_phys_addr =
+    (dl_slot_id_s1 == SLOT_FLOPPY_INT) ? {2'b01, dl_addr[19:1]} :
+    (dl_slot_id_s1 == SLOT_FLOPPY_EXT) ? {2'b10, dl_addr[19:1]} :
+                                         {3'b000, dl_addr[17:1]};
 
 // Convert data_loader 8-bit to 16-bit words and buffer in FIFO
 // Mac bus can only write one word per bus cycle (~32 clk_sys)
 reg [7:0]  dio_byte_hi;
 reg        dio_byte_toggle = 0;
-wire [7:0] dio_index = 0;
 
 // FIFO: stores {addr[20:0], data[15:0]} = 37 bits
 reg [36:0] dio_fifo [0:1023];
@@ -207,7 +225,7 @@ always @(posedge clk_sys) begin
             dio_byte_toggle <= 1;
         end else begin
             // Mac ROM is big-endian: the first byte at an even address is the word's high byte.
-            dio_fifo[dio_fifo_wr] <= {dl_addr[21:1], dio_byte_hi, dl_data};
+            dio_fifo[dio_fifo_wr] <= {dl_phys_addr, dio_byte_hi, dl_data};
             dio_fifo_wr <= dio_fifo_wr + 1'd1;
             dio_byte_toggle <= 0;
         end
@@ -240,6 +258,38 @@ always @(posedge clk_sys) begin
         else begin
             n_reset <= 1;
         end
+    end
+end
+
+// Floppy insertion state. Images live right after the ROM in SDRAM, matching MiSTer.
+reg dsk_int_ds = 0, dsk_ext_ds = 0;
+reg dsk_int_ss = 0, dsk_ext_ss = 0;
+wire dsk_int_ins = dsk_int_ds || dsk_int_ss;
+wire dsk_ext_ins = dsk_ext_ds || dsk_ext_ss;
+
+always @(posedge clk_sys) begin
+    reg old_down = 0;
+
+    old_down <= dio_download;
+    if (old_down && ~dio_download) begin
+        if (dl_slot_id_s1 == SLOT_FLOPPY_INT) begin
+            dsk_int_ds <= (dl_slot_size_s1 == 32'd819200);
+            dsk_int_ss <= (dl_slot_size_s1 == 32'd409600);
+        end
+        else if (dl_slot_id_s1 == SLOT_FLOPPY_EXT) begin
+            dsk_ext_ds <= (dl_slot_size_s1 == 32'd819200);
+            dsk_ext_ss <= (dl_slot_size_s1 == 32'd409600);
+        end
+    end
+
+    if (diskEject[0]) begin
+        dsk_int_ds <= 0;
+        dsk_int_ss <= 0;
+    end
+
+    if (diskEject[1]) begin
+        dsk_ext_ds <= 0;
+        dsk_ext_ss <= 0;
     end
 end
 
@@ -386,12 +436,6 @@ usb_to_ps2_mouse usb_mouse (
 // Data Controller (I/O hub: VIA, SCC, IWM, SCSI, keyboard, mouse, video, audio)
 wire [1:0] diskEject;
 wire [1:0] diskMotor, diskAct;
-
-// Stub floppy/SCSI for initial port
-wire dsk_int_ins = 0;
-wire dsk_ext_ins = 0;
-wire dsk_int_ds = 0;
-wire dsk_ext_ds = 0;
 
 // Stub SCSI
 wire [1:0] img_mounted_s = 0;
