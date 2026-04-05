@@ -1,6 +1,7 @@
 // generates 1024x768 (actually 512x768) @ 60Hz, from a 32.5MHz input clock
 module videoTimer #(
-	parameter VERTICAL_DOUBLE = 1'b1
+	parameter VERTICAL_DOUBLE = 1'b1,
+	parameter PIXEL_LATENCY = 1
 )(
 	input clk,
 	input clk_en,
@@ -23,8 +24,7 @@ module videoTimer #(
 					kHsyncStart = 131, // (1048/2)/4
 					kHsyncEnd = 147, // (1184/2)/4-1
 					kVsyncStart = 771,
-					kVsyncEnd = 776,
-					kPixelLatency = 1; // number of clk8 cycles from xpos==0 to when pixel data actually exits the video shift register
+					kVsyncEnd = 776;
 
 	// use screen buffer address for a 4MB RAM layout-- it will wrap
 	// around to the proper address for 1MB, 512K, and 128K layouts
@@ -62,12 +62,12 @@ module videoTimer #(
 
 	always @(posedge clk) begin
 		if (clk_en) begin
-			hsync <= ~(xpos >= kHsyncStart+kPixelLatency && xpos <= kHsyncEnd+kPixelLatency);  
+			hsync <= ~(xpos >= kHsyncStart+PIXEL_LATENCY && xpos <= kHsyncEnd+PIXEL_LATENCY);  
 			vsync <= ~(ypos >= kVsyncStart && ypos <= kVsyncEnd);
 		end
 	end
 
-	assign _hblank = ~(xpos >= kVisibleWidth+kPixelLatency);
+	assign _hblank = ~(xpos >= kVisibleWidth+PIXEL_LATENCY);
 	assign _vblank = ~(ypos < kVisibleHeightStart || ypos > kVisibleHeightEnd);
 	
 	// The 0,0 address actually starts below kScreenBufferBase, because the Mac screen buffer is

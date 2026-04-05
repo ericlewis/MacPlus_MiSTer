@@ -36,7 +36,7 @@
         "parameters": "0x1",
         "deferload": true,
         "size_maximum": "0x80000000",
-        "extensions": ["vhd", "img"],
+        "extensions": ["vhd", "img", "hda"],
         "address": "0x00000000"
       }
     ]

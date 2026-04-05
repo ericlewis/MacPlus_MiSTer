@@ -1,5 +1,6 @@
 module addrController_top #(
-	parameter VIDEO_VERTICAL_DOUBLE = 1'b1
+	parameter VIDEO_VERTICAL_DOUBLE = 1'b1,
+	parameter VIDEO_PIXEL_LATENCY = 1
 )(
 	// clocks:
 	input clk,
@@ -204,7 +205,8 @@ module addrController_top #(
 
 	// video
 	videoTimer #(
-		.VERTICAL_DOUBLE(VIDEO_VERTICAL_DOUBLE)
+		.VERTICAL_DOUBLE(VIDEO_VERTICAL_DOUBLE),
+		.PIXEL_LATENCY(VIDEO_PIXEL_LATENCY)
 	) vt(
 		.clk(clk),
 		.clk_en(clk8_en_p),

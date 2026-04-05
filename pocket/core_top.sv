@@ -474,7 +474,8 @@ fx68k fx68k_inst (
 
 // Address Controller
 addrController_top #(
-    .VIDEO_VERTICAL_DOUBLE(1'b0)
+    .VIDEO_VERTICAL_DOUBLE(1'b0),
+    .VIDEO_PIXEL_LATENCY(0)
 ) ac0 (
     .clk(clk_sys), .clk8(clk8),
     .clk8_en_p(clk8_en_p), .clk8_en_n(clk8_en_n),
