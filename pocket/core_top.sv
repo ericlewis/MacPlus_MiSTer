@@ -702,7 +702,15 @@ always @(posedge clk_sys) begin
                 if (!hdd_copy_idx[0]) begin
                     hdd_copy_lo <= sd_buff_din_s[0];
                 end else begin
-                    hdd_tx_buf[hdd_copy_idx[7:1]] <= {sd_buff_din_s[0], hdd_copy_lo};
+                    // SCSI buffer words are stored as {byte1, byte0}. Repack them into
+                    // bridge words in ascending byte order so APF writes the sector back
+                    // to disk as b0,b1,b2,b3 instead of reversing each 4-byte chunk.
+                    hdd_tx_buf[hdd_copy_idx[7:1]] <= {
+                        hdd_copy_lo[7:0],
+                        hdd_copy_lo[15:8],
+                        sd_buff_din_s[0][7:0],
+                        sd_buff_din_s[0][15:8]
+                    };
                 end
 
                 if (hdd_copy_idx == 8'hFF) begin
