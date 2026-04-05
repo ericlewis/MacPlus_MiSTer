@@ -11,7 +11,7 @@ wire is_mouse = (cont4_key[31:28] == 4'h5);
 reg [31:0] prev_report = 0;
 
 wire signed [15:0] mouse_dx = cont4_joy[15:0];
-wire signed [15:0] mouse_dy = cont4_trig[15:0];
+wire signed [15:0] mouse_dy = -$signed(cont4_trig[15:0]);
 
 function automatic [7:0] clamp_delta;
     input signed [15:0] delta;

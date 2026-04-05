@@ -24,7 +24,7 @@ wire moving = move_up | move_down | move_left | move_right;
 wire buttons_changed = (cur_buttons != prev_buttons);
 
 wire signed [8:0] dx_calc = move_left ? -STEP : (move_right ? STEP : 9'sd0);
-wire signed [8:0] dy_calc = move_up ? -STEP : (move_down ? STEP : 9'sd0);
+wire signed [8:0] dy_calc = move_up ? STEP : (move_down ? -STEP : 9'sd0);
 
 wire [7:0] dx8 = dx_calc[7:0];
 wire [7:0] dy8 = dy_calc[7:0];

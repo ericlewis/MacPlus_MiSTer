@@ -1,1 +1,1 @@
-{"video": {"magic": "APF_VER_1", "scaler_modes": [{"width": 256, "height": 342, "aspect_w": 256, "aspect_h": 171, "rotation": 0, "mirror": 0}], "display_modes": [{"id": "0x10"}]}}
+{"video": {"magic": "APF_VER_1", "scaler_modes": [{"width": 512, "height": 342, "aspect_w": 4, "aspect_h": 3, "rotation": 0, "mirror": 0}], "display_modes": [{"id": "0x10"}]}}
