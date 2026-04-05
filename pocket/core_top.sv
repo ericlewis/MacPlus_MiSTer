@@ -138,28 +138,55 @@ pll pll_inst(
 
 // ======== ROM Loading ========
 // Slot 0: Mac ROM (128KB or 256KB) loaded at 0x10000000
-// The ROM + optional floppy image concatenated
+// Pace the bridge output so the Mac DIO slot can keep up.
 wire        dl_wr;
 wire [27:0] dl_addr;
 wire [7:0]  dl_data;
 
-data_loader #(.ADDRESS_MASK_UPPER_4(4'h1), .ADDRESS_SIZE(28)) rom_loader (
+data_loader #(
+    .ADDRESS_MASK_UPPER_4(4'h1),
+    .ADDRESS_SIZE(28),
+    // One byte every 8 clk_sys cycles => one 16-bit ROM word every 16 cycles,
+    // which matches the Mac core's extra bus slot cadence.
+    .WRITE_MEM_CLOCK_DELAY(7)
+) rom_loader (
     .clk_74a(clk_74a), .clk_memory(clk_sys),
     .bridge_wr(bridge_wr), .bridge_endian_little(bridge_endian_little),
     .bridge_addr(bridge_addr), .bridge_wr_data(bridge_wr_data),
     .write_en(dl_wr), .write_addr(dl_addr), .write_data(dl_data)
 );
 
-// Download tracking
-reg is_downloading = 0;
+// Download tracking and ROM mode selection.
+reg dl_downloading_74a = 0;
+reg rom_is_se_74a = 0;
 always @(posedge clk_74a) begin
-    if (dataslot_requestwrite) is_downloading <= 1;
-    else if (dataslot_allcomplete) is_downloading <= 0;
+    if (dataslot_requestwrite) begin
+        dl_downloading_74a <= 1;
+        rom_is_se_74a <= (dataslot_requestwrite_size > 32'd131072);
+    end
+    else if (dataslot_allcomplete) dl_downloading_74a <= 0;
 end
 
-reg dl_s0, dl_s1;
-always @(posedge clk_sys) begin dl_s0 <= is_downloading; dl_s1 <= dl_s0; end
-wire dio_download = dl_s1;
+reg dl_s0 = 0, dl_s1 = 0;
+reg rom_is_se_s0 = 0, rom_is_se_s1 = 0;
+reg dl_active_prev = 0;
+reg [7:0] dl_tail_hold = 0;
+reg dio_write = 0;
+reg ioctl_wait = 0;
+
+always @(posedge clk_sys) begin
+    dl_s0 <= dl_downloading_74a;
+    dl_s1 <= dl_s0;
+    rom_is_se_s0 <= rom_is_se_74a;
+    rom_is_se_s1 <= rom_is_se_s0;
+
+    dl_active_prev <= dl_s1;
+    if (dl_s1) dl_tail_hold <= 8'd96;
+    else if (dl_active_prev) dl_tail_hold <= 8'd96;
+    else if (dl_tail_hold != 0) dl_tail_hold <= dl_tail_hold - 1'd1;
+end
+
+wire dl_active = dl_s1;
 
 // Convert data_loader 8-bit to 16-bit words and buffer in FIFO
 // Mac bus can only write one word per bus cycle (~32 clk_sys)
@@ -168,9 +195,9 @@ reg        dio_byte_toggle = 0;
 wire [7:0] dio_index = 0;
 
 // FIFO: stores {addr[20:0], data[15:0]} = 37 bits
-reg [36:0] dio_fifo [0:255];
-reg [7:0]  dio_fifo_wr = 0;
-reg [7:0]  dio_fifo_rd = 0;
+reg [36:0] dio_fifo [0:1023];
+reg [9:0]  dio_fifo_wr = 0;
+reg [9:0]  dio_fifo_rd = 0;
 
 // Write side: pack bytes into words, push to FIFO
 always @(posedge clk_sys) begin
@@ -190,6 +217,7 @@ end
 // Read side: drain one word per bus cycle
 reg [15:0] dio_data;
 reg [20:0] dio_a;
+wire dio_download = dl_active || (dl_tail_hold != 0) || dio_byte_toggle || (dio_fifo_rd != dio_fifo_wr) || ioctl_wait;
 
 // ======== Reset ========
 reg       n_reset = 0;
@@ -200,6 +228,7 @@ reg       status_mod = 0; // 0=Plus, 1=SE
 always @(posedge clk_sys) begin
     reg [15:0] rst_cnt;
     if (clk8_en_p) begin
+        status_mod <= rom_is_se_s1;
         if (~pll_core_locked || dio_download || ~_cpuReset_o) begin
             rst_cnt <= '1;
             n_reset <= 0;
@@ -522,9 +551,6 @@ sdram sdram_inst (
 
 // DIO write: match MiSTer's ioctl_wait pattern exactly
 // ioctl_wait goes high when word is ready, cleared after bus cycle writes it
-reg dio_write = 0;
-reg ioctl_wait = 0;
-
 always @(posedge clk_sys) begin
     reg old_cyc;
 

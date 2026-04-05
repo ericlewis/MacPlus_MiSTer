@@ -7,6 +7,7 @@
         "name": "Mac ROM",
         "required": true,
         "parameters": "0x1",
+        "size_maximum": "0x40000",
         "extensions": ["rom", "bin"],
         "address": "0x10000000"
       }
