@@ -28,6 +28,16 @@
         "size_maximum": "0x0C8000",
         "extensions": ["dsk"],
         "address": "0x10000000"
+      },
+      {
+        "id": 3,
+        "name": "Hard Disk",
+        "required": false,
+        "parameters": "0x1",
+        "deferload": true,
+        "size_maximum": "0x80000000",
+        "extensions": ["vhd"],
+        "address": "0x00000000"
       }
     ]
   }

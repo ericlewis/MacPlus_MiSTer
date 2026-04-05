@@ -84,13 +84,72 @@ wire [31:0] dataslot_requestwrite_size, dataslot_update_size;
 wire [31:0] rtc_epoch_seconds, rtc_date_bcd, rtc_time_bcd;
 wire rtc_valid, osnotify_inmenu;
 wire savestate_start, savestate_load;
-reg target_dataslot_read=0, target_dataslot_write=0, target_dataslot_getfile=0, target_dataslot_openfile=0;
 wire target_dataslot_ack, target_dataslot_done;
 wire [2:0] target_dataslot_err;
-reg [15:0] target_dataslot_id;
-reg [31:0] target_dataslot_slotoffset, target_dataslot_bridgeaddr, target_dataslot_length;
-wire [31:0] target_buffer_param_struct, target_buffer_resp_struct;
+localparam [1:0] TARGET_REQ_READ = 2'd0;
+localparam [1:0] TARGET_REQ_WRITE = 2'd1;
+localparam [1:0] TARGET_REQ_GETFILE = 2'd2;
+localparam [1:0] TARGET_REQ_OPENFILE = 2'd3;
+
+reg        target_req_sys = 0;
+reg  [1:0] target_req_type_sys = TARGET_REQ_READ;
+reg [15:0] target_req_id_sys = 0;
+reg [31:0] target_req_slotoffset_sys = 0;
+reg [31:0] target_req_bridgeaddr_sys = 0;
+reg [31:0] target_req_length_sys = 0;
+
+wire        target_req_74a;
+wire  [1:0] target_req_type_74a;
+wire [15:0] target_req_id_74a;
+wire [31:0] target_req_slotoffset_74a;
+wire [31:0] target_req_bridgeaddr_74a;
+wire [31:0] target_req_length_74a;
+
+wire target_dataslot_read = target_req_74a && (target_req_type_74a == TARGET_REQ_READ);
+wire target_dataslot_write = target_req_74a && (target_req_type_74a == TARGET_REQ_WRITE);
+wire target_dataslot_getfile = target_req_74a && (target_req_type_74a == TARGET_REQ_GETFILE);
+wire target_dataslot_openfile = target_req_74a && (target_req_type_74a == TARGET_REQ_OPENFILE);
+wire [15:0] target_dataslot_id = target_req_id_74a;
+wire [31:0] target_dataslot_slotoffset = target_req_slotoffset_74a;
+wire [31:0] target_dataslot_bridgeaddr = target_req_bridgeaddr_74a;
+wire [31:0] target_dataslot_length = target_req_length_74a;
+wire [31:0] target_buffer_param_struct = target_req_bridgeaddr_74a;
+wire [31:0] target_buffer_resp_struct = target_req_bridgeaddr_74a;
+
+wire target_dataslot_ack_sys;
+wire target_dataslot_done_sys;
+wire [2:0] target_dataslot_err_sys;
 wire [9:0] datatable_addr; wire datatable_wren; wire [31:0] datatable_data, datatable_q;
+
+synch_3 #(
+    .WIDTH(115)
+) target_req_sync (
+    {
+        target_req_sys,
+        target_req_type_sys,
+        target_req_id_sys,
+        target_req_slotoffset_sys,
+        target_req_bridgeaddr_sys,
+        target_req_length_sys
+    },
+    {
+        target_req_74a,
+        target_req_type_74a,
+        target_req_id_74a,
+        target_req_slotoffset_74a,
+        target_req_bridgeaddr_74a,
+        target_req_length_74a
+    },
+    clk_74a
+);
+
+synch_3 #(
+    .WIDTH(5)
+) target_resp_sync (
+    {target_dataslot_ack, target_dataslot_done, target_dataslot_err},
+    {target_dataslot_ack_sys, target_dataslot_done_sys, target_dataslot_err_sys},
+    clk_sys
+);
 
 core_bridge_cmd icb(
     .clk(clk_74a), .reset_n(reset_n),
@@ -119,11 +178,6 @@ core_bridge_cmd icb(
     .datatable_addr(datatable_addr), .datatable_wren(datatable_wren), .datatable_data(datatable_data), .datatable_q(datatable_q)
 );
 
-always @(posedge clk_74a) begin
-    target_dataslot_read <= 0; target_dataslot_write <= 0;
-    target_dataslot_getfile <= 0; target_dataslot_openfile <= 0;
-end
-
 // ======== Clocks ========
 wire clk_sys; // 32.5 MHz
 wire clk_mem; // 65 MHz
@@ -142,6 +196,8 @@ pll pll_inst(
 localparam [7:0] SLOT_ROM       = 8'd0;
 localparam [7:0] SLOT_FLOPPY_INT = 8'd1;
 localparam [7:0] SLOT_FLOPPY_EXT = 8'd2;
+localparam [7:0] SLOT_HDD       = 8'd3;
+localparam [31:0] HDD_BUFFER_BASE = 32'h20000000;
 
 wire        dl_wr;
 wire [27:0] dl_addr;
@@ -160,11 +216,26 @@ data_loader #(
     .write_en(dl_wr), .write_addr(dl_addr), .write_data(dl_data)
 );
 
+wire       hdd_dl_wr;
+wire [8:0] hdd_dl_addr;
+wire [7:0] hdd_dl_data;
+
+data_loader #(
+    .ADDRESS_MASK_UPPER_4(4'h2),
+    .ADDRESS_SIZE(9)
+) hdd_loader (
+    .clk_74a(clk_74a), .clk_memory(clk_sys),
+    .bridge_wr(bridge_wr), .bridge_endian_little(bridge_endian_little),
+    .bridge_addr(bridge_addr), .bridge_wr_data(bridge_wr_data),
+    .write_en(hdd_dl_wr), .write_addr(hdd_dl_addr), .write_data(hdd_dl_data)
+);
+
 // Download tracking and ROM mode selection.
 reg dl_downloading_74a = 0;
 reg rom_is_se_74a = 0;
 reg [7:0]  dl_slot_id_74a = SLOT_ROM;
 reg [31:0] dl_slot_size_74a = 0;
+reg [31:0] hdd_file_size_74a = 0;
 always @(posedge clk_74a) begin
     if (dataslot_requestwrite) begin
         dl_downloading_74a <= 1;
@@ -174,12 +245,16 @@ always @(posedge clk_74a) begin
             rom_is_se_74a <= (dataslot_requestwrite_size > 32'd131072);
     end
     else if (dataslot_allcomplete) dl_downloading_74a <= 0;
+
+    if (dataslot_update && dataslot_update_id[7:0] == SLOT_HDD)
+        hdd_file_size_74a <= dataslot_update_size;
 end
 
 reg dl_s0 = 0, dl_s1 = 0;
 reg rom_is_se_s0 = 0, rom_is_se_s1 = 0;
 reg [7:0] dl_slot_id_s0 = SLOT_ROM, dl_slot_id_s1 = SLOT_ROM;
 reg [31:0] dl_slot_size_s0 = 0, dl_slot_size_s1 = 0;
+reg [31:0] hdd_file_size_s0 = 0, hdd_file_size_s1 = 0;
 reg dl_active_prev = 0;
 reg [7:0] dl_tail_hold = 0;
 reg dio_write = 0;
@@ -194,6 +269,8 @@ always @(posedge clk_sys) begin
     dl_slot_id_s1 <= dl_slot_id_s0;
     dl_slot_size_s0 <= dl_slot_size_74a;
     dl_slot_size_s1 <= dl_slot_size_s0;
+    hdd_file_size_s0 <= hdd_file_size_74a;
+    hdd_file_size_s1 <= hdd_file_size_s0;
 
     dl_active_prev <= dl_s1;
     if (dl_s1) dl_tail_hold <= 8'd96;
@@ -437,21 +514,89 @@ usb_to_ps2_mouse usb_mouse (
 wire [1:0] diskEject;
 wire [1:0] diskMotor, diskAct;
 
-// Stub SCSI
-wire [1:0] img_mounted_s = 0;
-wire [31:0] img_size_s = 0;
-
 localparam SCSI_DEVS = 2;
 wire [31:0] sd_lba_s [SCSI_DEVS];
-wire [SCSI_DEVS-1:0] sd_rd_s, sd_wr_s, sd_ack_s;
-wire [7:0] sd_buff_addr_s;
-wire [15:0] sd_buff_dout_s;
+wire [SCSI_DEVS-1:0] sd_rd_s, sd_wr_s;
+reg  [SCSI_DEVS-1:0] sd_ack_s = 0;
+reg  [7:0] sd_buff_addr_s = 0;
+reg [15:0] sd_buff_dout_s = 0;
 wire [15:0] sd_buff_din_s [SCSI_DEVS];
-wire sd_buff_wr_s;
+reg sd_buff_wr_s = 0;
+wire [SCSI_DEVS-1:0] img_mounted_s = {1'b0, |hdd_file_size_s1};
+wire [31:0] img_size_s = hdd_file_size_s1[31:9];
 
-assign sd_ack_s = 0;
-assign sd_buff_dout_s = 0;
-assign sd_buff_wr_s = 0;
+localparam HDS_IDLE = 2'd0;
+localparam HDS_WAIT_ACK = 2'd1;
+localparam HDS_FILL = 2'd2;
+localparam HDS_ERROR = 2'd3;
+
+reg [1:0] hdd_state = HDS_IDLE;
+reg [9:0] hdd_rx_count = 0;
+reg [7:0] hdd_byte_lo = 0;
+reg       hdd_byte_toggle = 0;
+
+always @(posedge clk_sys) begin
+    sd_ack_s <= 0;
+    sd_buff_wr_s <= 0;
+
+    if (target_dataslot_ack_sys)
+        target_req_sys <= 0;
+
+    if (hdd_state == HDS_FILL && hdd_dl_wr) begin
+        if (!hdd_byte_toggle) begin
+            hdd_byte_lo <= hdd_dl_data;
+            hdd_byte_toggle <= 1;
+        end else begin
+            sd_buff_addr_s <= hdd_rx_count[9:1];
+            sd_buff_dout_s <= {hdd_dl_data, hdd_byte_lo};
+            sd_buff_wr_s <= 1;
+            hdd_byte_toggle <= 0;
+        end
+
+        hdd_rx_count <= hdd_rx_count + 1'd1;
+    end
+
+    case (hdd_state)
+        HDS_IDLE: begin
+            hdd_rx_count <= 0;
+            hdd_byte_toggle <= 0;
+
+            if (sd_rd_s[0] && img_mounted_s[0] && !target_req_sys) begin
+                target_req_type_sys <= TARGET_REQ_READ;
+                target_req_id_sys <= SLOT_HDD;
+                target_req_slotoffset_sys <= sd_lba_s[0] << 9;
+                target_req_bridgeaddr_sys <= HDD_BUFFER_BASE;
+                target_req_length_sys <= 32'd512;
+                target_req_sys <= 1;
+                hdd_state <= HDS_WAIT_ACK;
+            end else if (sd_wr_s[0] && img_mounted_s[0]) begin
+                // First pass: acknowledge writes without persisting them.
+                sd_ack_s[0] <= 1'b1;
+            end
+        end
+
+        HDS_WAIT_ACK: begin
+            if (target_dataslot_ack_sys)
+                hdd_state <= HDS_FILL;
+            else if (target_dataslot_done_sys && target_dataslot_err_sys != 0)
+                hdd_state <= HDS_ERROR;
+        end
+
+        HDS_FILL: begin
+            if (hdd_rx_count == 10'd512 && !hdd_byte_toggle) begin
+                sd_ack_s[0] <= 1'b1;
+                hdd_state <= HDS_IDLE;
+            end else if (target_dataslot_done_sys && target_dataslot_err_sys != 0) begin
+                hdd_state <= HDS_ERROR;
+            end
+        end
+
+        HDS_ERROR: begin
+            if (!sd_rd_s[0])
+                hdd_state <= HDS_IDLE;
+        end
+    endcase
+end
 
 dataController_top #(SCSI_DEVS) dc0 (
     .clk32(clk_sys),
