@@ -2,7 +2,7 @@
 module pad_to_ps2_mouse (
     input         clk,
     input  [31:0] cont1_key,
-    output reg [24:0] ps2_mouse
+    output reg [24:0] ps2_mouse = 0
 );
 
 localparam [17:0] MOVE_PERIOD = 18'd200000;

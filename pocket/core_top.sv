@@ -216,7 +216,7 @@ data_loader #(
     .ADDRESS_SIZE(28),
     // One byte every 8 clk_sys cycles => one 16-bit ROM word every 16 cycles,
     // which matches the Mac core's extra bus slot cadence.
-    .WRITE_MEM_CLOCK_DELAY(7)
+    .WRITE_MEM_CLOCK_DELAY(8)
 ) rom_loader (
     .clk_74a(clk_74a), .clk_memory(clk_sys),
     .bridge_wr(bridge_wr), .bridge_endian_little(bridge_endian_little),
@@ -856,11 +856,23 @@ assign video_rgb_clock    = clk_sys;
 assign video_rgb_clock_90 = clk_sys_90;
 assign video_skip = 1'b0;
 
+reg [23:0] video_rgb_r = 0;
+reg        video_de_r = 0;
+reg        video_vs_r = 0;
+reg        video_hs_r = 0;
 wire [7:0] pix = {8{pixelOut}};
-assign video_rgb = (_vblank & _hblank) ? {pix, pix, pix} : 24'd0;
-assign video_de  = _vblank & _hblank;
-assign video_vs  = vsync;
-assign video_hs  = hsync;
+
+always @(posedge clk_sys) begin
+    video_de_r  <= _vblank & _hblank;
+    video_vs_r  <= vsync;
+    video_hs_r  <= hsync;
+    video_rgb_r <= (_vblank & _hblank) ? {pix, pix, pix} : 24'd0;
+end
+
+assign video_rgb = video_rgb_r;
+assign video_de  = video_de_r;
+assign video_vs  = video_vs_r;
+assign video_hs  = video_hs_r;
 
 // ======== Audio ========
 wire [15:0] mac_audio_i2s = {mac_audio[10], mac_audio, 4'b0};

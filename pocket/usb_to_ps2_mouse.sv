@@ -4,11 +4,12 @@ module usb_to_ps2_mouse (
     input  [31:0] cont4_key,
     input  [31:0] cont4_joy,
     input  [15:0] cont4_trig,
-    output reg [24:0] ps2_mouse
+    output reg [24:0] ps2_mouse = 0
 );
 
 wire is_mouse = (cont4_key[31:28] == 4'h5);
-reg [31:0] prev_report = 0;
+wire [79:0] mouse_report = {cont4_key, cont4_joy, cont4_trig};
+reg [79:0] prev_report = 0;
 
 wire signed [15:0] mouse_dx = cont4_joy[15:0];
 wire signed [15:0] mouse_dy = -$signed(cont4_trig[15:0]);
@@ -31,8 +32,8 @@ always @(posedge clk) begin
     if (!is_mouse) begin
         ps2_mouse <= 0;
         prev_report <= 0;
-    end else if (cont4_key != prev_report) begin
-        prev_report <= cont4_key;
+    end else if (mouse_report != prev_report) begin
+        prev_report <= mouse_report;
         ps2_mouse <= {
             ~ps2_mouse[24],
             dy8,
