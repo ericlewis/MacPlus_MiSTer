@@ -126,8 +126,8 @@ wire [2:0] target_dataslot_err_sys;
 localparam [9:0] HDD_SIZE_DATATABLE_ADDR = 10'd7;
 reg  [9:0] datatable_addr = 0;
 wire [31:0] datatable_q;
-wire        datatable_wren = 1'b0;
-wire [31:0] datatable_data = 32'd0;
+reg         datatable_wren = 1'b0;
+reg  [31:0] datatable_data = 32'd0;
 
 synch_3 #(
     .WIDTH(115)
@@ -244,8 +244,11 @@ reg rom_is_se_74a = 0;
 reg [7:0]  dl_slot_id_74a = SLOT_ROM;
 reg [31:0] dl_slot_size_74a = 0;
 reg [31:0] hdd_file_size_74a = 0;
+reg        prev_dataslot_update_74a = 0;
 always @(posedge clk_74a) begin
+    prev_dataslot_update_74a <= dataslot_update;
     datatable_addr <= HDD_SIZE_DATATABLE_ADDR;
+    datatable_wren <= 1'b0;
 
     if (dataslot_requestwrite) begin
         dl_downloading_74a <= 1;
@@ -256,7 +259,20 @@ always @(posedge clk_74a) begin
     end
     else if (dataslot_allcomplete) dl_downloading_74a <= 0;
 
+    // Deferloaded slots report their selected file size through dataslot_update.
+    // Mirror that into the shared datatable and cache the HDD size locally so
+    // the SCSI target becomes "mounted" once a disk image is chosen.
+    if (dataslot_update && ~prev_dataslot_update_74a) begin
+        datatable_addr <= {dataslot_update_id[7:0], 1'b1};
+        datatable_data <= dataslot_update_size;
+        datatable_wren <= 1'b1;
+
+        if (dataslot_update_id[7:0] == SLOT_HDD)
+            hdd_file_size_74a <= dataslot_update_size;
+    end
+    else begin
     hdd_file_size_74a <= datatable_q;
+    end
 end
 
 reg dl_s0 = 0, dl_s1 = 0;
