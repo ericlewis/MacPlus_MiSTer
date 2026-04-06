@@ -4,7 +4,7 @@ module usb_to_ps2 (
     input  [31:0] cont3_key,
     input  [31:0] cont3_joy,
     input  [15:0] cont3_trig,
-    output reg [10:0] ps2_key
+    output reg [10:0] ps2_key = 0
 );
 
 wire is_kb = (cont3_key[31:28] == 4'h4);

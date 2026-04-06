@@ -34,15 +34,13 @@ module sound_i2s #(
     input wire [CHANNEL_WIDTH - 1:0] audio_l,
     input wire [CHANNEL_WIDTH - 1:0] audio_r,
 
-    output reg audio_mclk,
-    output reg audio_lrck,
-    output reg audio_dac
+    output reg audio_mclk = 0,
+    output reg audio_lrck = 0,
+    output reg audio_dac = 0
 );
   //
   // audio i2s generator
   //
-
-  reg audgen_nextsamp;
 
   // generate MCLK = 12.288mhz with fractional accumulator
   reg [21:0] audgen_accum = 0;
@@ -56,8 +54,8 @@ module sound_i2s #(
   end
 
   // generate SCLK = 3.072mhz by dividing MCLK by 4
-  reg [1:0] aud_mclk_divider;
-  reg prev_audio_mclk;
+  reg [1:0] aud_mclk_divider = 0;
+  reg prev_audio_mclk = 0;
   wire audgen_sclk = aud_mclk_divider[1]  /* synthesis keep*/;
 
   always @(posedge clk_74a) begin
@@ -111,8 +109,8 @@ module sound_i2s #(
   );
 
   reg write_en = 0;
-  reg [CHANNEL_WIDTH - 1:0] prev_left;
-  reg [CHANNEL_WIDTH - 1:0] prev_right;
+  reg [CHANNEL_WIDTH - 1:0] prev_left = 0;
+  reg [CHANNEL_WIDTH - 1:0] prev_right = 0;
 
   // Mark write when necessary
   always @(posedge clk_audio) begin
@@ -128,9 +126,9 @@ module sound_i2s #(
 
   wire [31:0] audgen_sampdata_s;
 
-  reg [31:0] audgen_sampshift;
-  reg [4:0] audio_lrck_cnt;
-  reg prev_audgen_sclk;
+  reg [31:0] audgen_sampshift = 0;
+  reg [4:0] audio_lrck_cnt = 0;
+  reg prev_audgen_sclk = 0;
   always @(posedge clk_74a) begin
     if (prev_audgen_sclk && ~audgen_sclk) begin
       // output the next bit
