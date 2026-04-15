@@ -3,20 +3,10 @@
     "magic": "APF_VER_1",
     "data_slots": [
       {
-        "id": 200,
-        "name": "MPU Firmware",
-        "required": true,
-        "parameters": "0x2",
-        "size_maximum": "0x10000",
-        "extensions": ["bin"],
-        "filename": "mpu.bin",
-        "address": "0x80000000"
-      },
-      {
         "id": 0,
         "name": "Mac ROM",
         "required": true,
-        "parameters": "0x1",
+        "parameters": "0x0",
         "size_maximum": "0x40000",
         "extensions": ["rom", "bin"],
         "address": "0x10000000"
@@ -26,20 +16,18 @@
         "name": "Internal Floppy",
         "required": false,
         "parameters": "0x1",
-        "deferload": true,
         "size_maximum": "0x0C8000",
         "extensions": ["dsk"],
-        "address": "0x00000000"
+        "address": "0x20000000"
       },
       {
         "id": 2,
         "name": "External Floppy",
         "required": false,
         "parameters": "0x1",
-        "deferload": true,
         "size_maximum": "0x0C8000",
         "extensions": ["dsk"],
-        "address": "0x00000000"
+        "address": "0x30000000"
       },
       {
         "id": 3,
@@ -49,7 +37,17 @@
         "deferload": true,
         "size_maximum": "0x80000000",
         "extensions": ["vhd", "img", "hda"],
-        "address": "0x00000000"
+        "address": "0x40000000"
+      },
+      {
+        "id": 200,
+        "name": "MPU Firmware",
+        "required": true,
+        "parameters": "0xA",
+        "size_maximum": "0x10000",
+        "extensions": ["bin"],
+        "filename": "mpu.bin",
+        "address": "0x80000000"
       }
     ]
   }

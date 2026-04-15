@@ -265,9 +265,21 @@ always @(posedge clk_74a) begin
     datatable_addr <= HDD_SIZE_DATATABLE_ADDR;
     datatable_wren <= 1'b0;
 
-    if (dataslot_requestwrite && (dataslot_requestwrite_id[7:0] == SLOT_ROM)) begin
+    if (dataslot_requestwrite) begin
         dl_downloading_74a <= 1;
-        rom_is_se_74a <= (dataslot_requestwrite_size > 32'd131072);
+        case (dataslot_requestwrite_id[7:0])
+            SLOT_ROM: begin
+                rom_is_se_74a <= (dataslot_requestwrite_size > 32'd131072);
+            end
+            SLOT_FLOPPY_INT: begin
+                floppy_int_size_74a <= dataslot_requestwrite_size;
+            end
+            SLOT_FLOPPY_EXT: begin
+                floppy_ext_size_74a <= dataslot_requestwrite_size;
+            end
+            default: begin
+            end
+        endcase
     end
     else if (dataslot_allcomplete) dl_downloading_74a <= 0;
 
