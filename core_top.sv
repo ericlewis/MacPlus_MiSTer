@@ -64,20 +64,16 @@ assign cram1_adv_n=1; assign cram1_cre=0; assign cram1_ce0_n=1; assign cram1_ce1
 assign cram1_oe_n=1; assign cram1_we_n=1; assign cram1_ub_n=1; assign cram1_lb_n=1;
 assign sram_a=0; assign sram_dq={16{1'bZ}};
 assign sram_oe_n=1; assign sram_we_n=1; assign sram_ub_n=1; assign sram_lb_n=1;
-assign user1=1'bZ; assign aux_scl=1'bZ; assign vpll_feed=1'bZ;
+assign dbg_tx=1'bZ; assign user1=1'bZ; assign aux_scl=1'bZ; assign vpll_feed=1'bZ;
 
 // ======== Bridge ========
 wire [31:0] cmd_bridge_rd_data;
-wire [31:0] hdd_bridge_rd_data = 32'd0;
+wire [31:0] hdd_bridge_rd_data;
 wire [31:0] interact_bridge_rd_data;
-wire [31:0] mpu_ram_bridge_rd_data;
-wire [31:0] mpu_reg_bridge_rd_data;
 always @(*) begin
     casex(bridge_addr)
     32'h00xxxxxx: bridge_rd_data <= interact_bridge_rd_data;
     32'h200xxxxx: bridge_rd_data <= hdd_bridge_rd_data;
-    32'h8000xxxx: bridge_rd_data <= mpu_ram_bridge_rd_data;
-    32'h810000xx: bridge_rd_data <= mpu_reg_bridge_rd_data;
     32'hF8xxxxxx: bridge_rd_data <= cmd_bridge_rd_data;
     default:      bridge_rd_data <= 0;
     endcase
@@ -127,18 +123,6 @@ wire [31:0] target_buffer_resp_struct = target_req_bridgeaddr_74a;
 wire target_dataslot_ack_sys;
 wire target_dataslot_done_sys;
 wire [2:0] target_dataslot_err_sys;
-wire mpu_target_dataslot_read;
-wire mpu_target_dataslot_write;
-wire [15:0] mpu_target_dataslot_id;
-wire [31:0] mpu_target_dataslot_slotoffset;
-wire [31:0] mpu_target_dataslot_bridgeaddr;
-wire [31:0] mpu_target_dataslot_length;
-wire mpu_io_uio;
-wire mpu_io_fpga;
-wire mpu_io_strobe;
-wire mpu_io_wait;
-wire [15:0] mpu_io_din;
-wire [15:0] mpu_io_dout;
 localparam [9:0] HDD_SIZE_DATATABLE_ADDR = 10'd7;
 reg  [9:0] datatable_addr = 0;
 wire [31:0] datatable_q;
@@ -193,65 +177,13 @@ core_bridge_cmd icb(
     .savestate_start(savestate_start), .savestate_start_ack(0), .savestate_start_busy(0), .savestate_start_ok(0), .savestate_start_err(0),
     .savestate_load(savestate_load), .savestate_load_ack(0), .savestate_load_busy(0), .savestate_load_ok(0), .savestate_load_err(0),
     .osnotify_inmenu(osnotify_inmenu),
-    .target_dataslot_read(mpu_target_dataslot_read), .target_dataslot_write(mpu_target_dataslot_write),
-    .target_dataslot_getfile(1'b0), .target_dataslot_openfile(1'b0),
+    .target_dataslot_read(target_dataslot_read), .target_dataslot_write(target_dataslot_write),
+    .target_dataslot_getfile(target_dataslot_getfile), .target_dataslot_openfile(target_dataslot_openfile),
     .target_dataslot_ack(target_dataslot_ack), .target_dataslot_done(target_dataslot_done), .target_dataslot_err(target_dataslot_err),
-    .target_dataslot_id(mpu_target_dataslot_id), .target_dataslot_slotoffset(mpu_target_dataslot_slotoffset),
-    .target_dataslot_bridgeaddr(mpu_target_dataslot_bridgeaddr), .target_dataslot_length(mpu_target_dataslot_length),
-    .target_buffer_param_struct(32'd0), .target_buffer_resp_struct(32'd0),
+    .target_dataslot_id(target_dataslot_id), .target_dataslot_slotoffset(target_dataslot_slotoffset),
+    .target_dataslot_bridgeaddr(target_dataslot_bridgeaddr), .target_dataslot_length(target_dataslot_length),
+    .target_buffer_param_struct(target_buffer_param_struct), .target_buffer_resp_struct(target_buffer_resp_struct),
     .datatable_addr(datatable_addr), .datatable_wren(datatable_wren), .datatable_data(datatable_data), .datatable_q(datatable_q)
-);
-
-substitute_mcu_apf_mister mpu_sidecar (
-    .clk_mpu(clk_74a),
-    .clk_sys(clk_sys),
-    .reset_n(reset_n),
-    .reset_out(),
-    .clk_74a(clk_74a),
-    .bridge_addr(bridge_addr),
-    .bridge_rd(bridge_rd),
-    .mpu_ram_bridge_rd_data(mpu_ram_bridge_rd_data),
-    .mpu_reg_bridge_rd_data(mpu_reg_bridge_rd_data),
-    .bridge_wr(bridge_wr),
-    .bridge_wr_data(bridge_wr_data),
-    .dataslot_update(dataslot_update),
-    .dataslot_update_id(dataslot_update_id),
-    .dataslot_update_size(dataslot_update_size),
-    .target_dataslot_read(mpu_target_dataslot_read),
-    .target_dataslot_write(mpu_target_dataslot_write),
-    .target_dataslot_ack(target_dataslot_ack),
-    .target_dataslot_done(target_dataslot_done),
-    .target_dataslot_err(target_dataslot_err),
-    .target_dataslot_id(mpu_target_dataslot_id),
-    .target_dataslot_slotoffset(mpu_target_dataslot_slotoffset),
-    .target_dataslot_bridgeaddr(mpu_target_dataslot_bridgeaddr),
-    .target_dataslot_length(mpu_target_dataslot_length),
-    .datatable_addr(),
-    .datatable_wren(),
-    .datatable_rden(1'b1),
-    .datatable_data(32'd0),
-    .datatable_q(datatable_q),
-    .rxd(dbg_rx),
-    .txd(dbg_tx),
-    .cont1_key(cont1_key),
-    .cont2_key(cont2_key),
-    .cont3_key(cont3_key),
-    .cont4_key(cont4_key),
-    .cont1_joy(cont1_joy),
-    .cont2_joy(cont2_joy),
-    .cont3_joy(cont3_joy),
-    .cont4_joy(cont4_joy),
-    .cont1_trig(cont1_trig),
-    .cont2_trig(cont2_trig),
-    .cont3_trig(cont3_trig),
-    .cont4_trig(cont4_trig),
-    .IO_UIO(mpu_io_uio),
-    .IO_FPGA(mpu_io_fpga),
-    .IO_STROBE(mpu_io_strobe),
-    .IO_WAIT(mpu_io_wait),
-    .IO_DIN(mpu_io_din),
-    .IO_DOUT(mpu_io_dout),
-    .IO_WIDE(1'b1)
 );
 
 // ======== Clocks ========
@@ -733,34 +665,151 @@ wire [1:0] diskMotor, diskAct;
 localparam SCSI_DEVS = 2;
 wire [31:0] sd_lba_s [SCSI_DEVS];
 wire [SCSI_DEVS-1:0] sd_rd_s, sd_wr_s;
+reg  [SCSI_DEVS-1:0] sd_ack_s = 0;
+reg  [7:0] sd_buff_addr_s = 0;
+reg [15:0] sd_buff_dout_s = 0;
 wire [15:0] sd_buff_din_s [SCSI_DEVS];
+reg sd_buff_wr_s = 0;
 wire [SCSI_DEVS-1:0] img_mounted_s = {1'b0, hdd_attached_s1 && |hdd_file_size_s1};
 wire [31:0] img_size_s = hdd_file_size_s1[31:9];
-wire [SCSI_DEVS-1:0] sd_ack_s = {1'b0, mpu_scsi_ack};
-wire [7:0] sd_buff_addr_s;
-wire [15:0] sd_buff_dout_s;
-wire sd_buff_wr_s;
-wire mpu_scsi_ack;
 
-mac_scsi_mpu_bridge mac_scsi_sidecar (
-    .clk(clk_sys),
-    .reset_n(reset_n),
-    .io_fpga(mpu_io_fpga),
-    .io_strobe(mpu_io_strobe),
-    .io_dout(mpu_io_dout),
-    .io_din(mpu_io_din),
-    .io_wait(mpu_io_wait),
-    .img_mounted(img_mounted_s[0]),
-    .img_blocks(img_size_s),
-    .io_lba(sd_lba_s[0]),
-    .io_rd(sd_rd_s[0]),
-    .io_wr(sd_wr_s[0]),
-    .io_ack(mpu_scsi_ack),
-    .sd_buff_addr(sd_buff_addr_s),
-    .sd_buff_dout(sd_buff_dout_s),
-    .sd_buff_din(sd_buff_din_s[0]),
-    .sd_buff_wr(sd_buff_wr_s)
-);
+localparam HDS_IDLE       = 3'd0;
+localparam HDS_WAIT_ACK   = 3'd1;
+localparam HDS_FILL       = 3'd2;
+localparam HDS_DONE       = 3'd3;
+localparam HDS_ERROR      = 3'd4;
+localparam HDS_WRITE_PREP = 3'd5;
+localparam HDS_WRITE_COPY = 3'd6;
+localparam HDS_WRITE_WAIT = 3'd7;
+
+reg [2:0] hdd_state = HDS_IDLE;
+reg [9:0] hdd_rx_count = 0;
+reg [7:0] hdd_byte_lo = 0;
+reg       hdd_byte_toggle = 0;
+reg [7:0] hdd_copy_idx = 0;
+reg       hdd_copy_primed = 0;
+reg [15:0] hdd_copy_lo = 0;
+(* ramstyle = "M10K, no_rw_check" *) reg [31:0] hdd_tx_buf [0:127];
+
+wire [6:0] hdd_bridge_word = bridge_addr[8:2];
+wire       hdd_bridge_sel = (bridge_addr[31:9] == HDD_BUFFER_BASE[31:9]);
+assign hdd_bridge_rd_data = hdd_bridge_sel ? hdd_tx_buf[hdd_bridge_word] : 32'd0;
+
+always @(posedge clk_sys) begin
+    sd_ack_s <= 0;
+    sd_buff_wr_s <= 0;
+
+    if (target_dataslot_ack_sys)
+        target_req_sys <= 0;
+
+    if (hdd_state == HDS_FILL && hdd_dl_wr) begin
+        if (!hdd_byte_toggle) begin
+            hdd_byte_lo <= hdd_dl_data;
+            hdd_byte_toggle <= 1;
+        end else begin
+            sd_buff_addr_s <= hdd_rx_count[8:1];
+            sd_buff_dout_s <= {hdd_dl_data, hdd_byte_lo};
+            sd_buff_wr_s <= 1;
+            hdd_byte_toggle <= 0;
+        end
+
+        hdd_rx_count <= hdd_rx_count + 1'd1;
+    end
+
+    case (hdd_state)
+        HDS_IDLE: begin
+            hdd_rx_count <= 0;
+            hdd_byte_toggle <= 0;
+
+            if (sd_rd_s[0] && img_mounted_s[0] && !target_req_sys) begin
+                target_req_type_sys <= TARGET_REQ_READ;
+                target_req_id_sys <= SLOT_HDD;
+                target_req_slotoffset_sys <= sd_lba_s[0] << 9;
+                target_req_bridgeaddr_sys <= HDD_BUFFER_BASE;
+                target_req_length_sys <= 32'd512;
+                target_req_sys <= 1;
+                hdd_state <= HDS_WAIT_ACK;
+            end else if (sd_wr_s[0] && img_mounted_s[0]) begin
+                hdd_state <= HDS_WRITE_PREP;
+            end
+        end
+
+        HDS_WAIT_ACK: begin
+            if (target_dataslot_ack_sys)
+                hdd_state <= HDS_FILL;
+            else if (target_dataslot_done_sys && target_dataslot_err_sys != 0)
+                hdd_state <= HDS_ERROR;
+        end
+
+        HDS_FILL: begin
+            if (hdd_rx_count == 10'd512 && !hdd_byte_toggle) begin
+                hdd_state <= HDS_DONE;
+            end else if (target_dataslot_done_sys && target_dataslot_err_sys != 0) begin
+                hdd_state <= HDS_ERROR;
+            end
+        end
+
+        HDS_DONE: begin
+            sd_ack_s[0] <= 1'b1;
+            if (!sd_rd_s[0] && !sd_wr_s[0])
+                hdd_state <= HDS_IDLE;
+        end
+
+        HDS_ERROR: begin
+            if (!sd_rd_s[0] && !sd_wr_s[0])
+                hdd_state <= HDS_IDLE;
+        end
+
+        HDS_WRITE_PREP: begin
+            hdd_copy_idx <= 0;
+            hdd_copy_primed <= 0;
+            sd_buff_addr_s <= 0;
+            hdd_state <= HDS_WRITE_COPY;
+        end
+
+        HDS_WRITE_COPY: begin
+            if (!hdd_copy_primed) begin
+                hdd_copy_primed <= 1;
+                sd_buff_addr_s <= 0;
+            end else begin
+                if (!hdd_copy_idx[0]) begin
+                    hdd_copy_lo <= sd_buff_din_s[0];
+                end else begin
+                    // SCSI buffer words are stored as {byte1, byte0}. Repack them into
+                    // bridge words in ascending byte order so APF writes the sector back
+                    // to disk as b0,b1,b2,b3 instead of reversing each 4-byte chunk.
+                    hdd_tx_buf[hdd_copy_idx[7:1]] <= {
+                        hdd_copy_lo[7:0],
+                        hdd_copy_lo[15:8],
+                        sd_buff_din_s[0][7:0],
+                        sd_buff_din_s[0][15:8]
+                    };
+                end
+
+                if (hdd_copy_idx == 8'hFF) begin
+                    target_req_type_sys <= TARGET_REQ_WRITE;
+                    target_req_id_sys <= SLOT_HDD;
+                    target_req_slotoffset_sys <= sd_lba_s[0] << 9;
+                    target_req_bridgeaddr_sys <= HDD_BUFFER_BASE;
+                    target_req_length_sys <= 32'd512;
+                    target_req_sys <= 1;
+                    hdd_state <= HDS_WRITE_WAIT;
+                end else begin
+                    hdd_copy_idx <= hdd_copy_idx + 1'd1;
+                    sd_buff_addr_s <= hdd_copy_idx + 1'd1;
+                end
+            end
+        end
+
+        HDS_WRITE_WAIT: begin
+            if (target_dataslot_done_sys && target_dataslot_err_sys == 0) begin
+                hdd_state <= HDS_DONE;
+            end else if (target_dataslot_done_sys && target_dataslot_err_sys != 0) begin
+                hdd_state <= HDS_ERROR;
+            end
+        end
+    endcase
+end
 
 dataController_top #(SCSI_DEVS) dc0 (
     .clk32(clk_sys),

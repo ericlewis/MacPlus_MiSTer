@@ -3,6 +3,16 @@
     "magic": "APF_VER_1",
     "data_slots": [
       {
+        "id": 200,
+        "name": "MPU Firmware",
+        "required": true,
+        "parameters": "0x2",
+        "size_maximum": "0x10000",
+        "extensions": ["bin"],
+        "filename": "mpu.bin",
+        "address": "0x80000000"
+      },
+      {
         "id": 0,
         "name": "Mac ROM",
         "required": true,

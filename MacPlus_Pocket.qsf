@@ -738,16 +738,8 @@ set_global_assignment -name PARTITION_COLOR 16764057 -section_id Top
 # end ENTITY(mf_pllbase_0002)
 # ---------------------------
 set_global_assignment -name QIP_FILE apf/apf.qip
-set_global_assignment -name VERILOG_FILE MPU/controller_rom.v
-set_global_assignment -name VERILOG_FILE MPU/VexRiscv.v
-set_global_assignment -name QIP_FILE MPU/uart_fifo.qip
-set_global_assignment -name VERILOG_FILE MPU/substitute_mcu_apf.v
-set_global_assignment -name VHDL_FILE MPU/simple_uart.vhd
-set_global_assignment -name QIP_FILE MPU/imem_bram.qip
-set_global_assignment -name QIP_FILE MPU/dmem_bram.qip
 set_global_assignment -name SYSTEMVERILOG_FILE core_top.sv
 set_global_assignment -name VERILOG_FILE core_bridge_cmd.v
-set_global_assignment -name SYSTEMVERILOG_FILE mac_scsi_mpu_bridge.sv
 set_global_assignment -name SDC_FILE core_constraints.sdc
 set_global_assignment -name VERILOG_FILE pocket_pll.v
 set_global_assignment -name QIP_FILE mf_pllbase.qip
