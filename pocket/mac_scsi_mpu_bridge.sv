@@ -38,6 +38,7 @@ assign io_wait = 1'b0;
 reg        req_pending = 1'b0;
 reg        req_write = 1'b0;
 reg [31:0] req_lba = 32'd0;
+reg        ack_active = 1'b0;
 reg        buf_write_pending = 1'b0;
 reg [7:0]  buf_write_addr = 8'd0;
 reg [15:0] sd_buff_din_latched = 16'd0;
@@ -52,15 +53,21 @@ always @(posedge clk or negedge reset_n) begin
         req_pending <= 1'b0;
         req_write <= 1'b0;
         req_lba <= 32'd0;
+        ack_active <= 1'b0;
         buf_write_pending <= 1'b0;
         buf_write_addr <= 8'd0;
         sd_buff_din_latched <= 16'd0;
     end else begin
-        io_ack <= 1'b0;
+        io_ack <= ack_active;
         sd_buff_wr <= 1'b0;
         sd_buff_din_latched <= sd_buff_din;
 
-        if (!req_pending) begin
+        if (ack_active && !io_rd && !io_wr) begin
+            ack_active <= 1'b0;
+            io_ack <= 1'b0;
+        end
+
+        if (!req_pending && !ack_active) begin
             if (io_rd) begin
                 req_pending <= 1'b1;
                 req_write <= 1'b0;
@@ -100,6 +107,7 @@ always @(posedge clk or negedge reset_n) begin
                         io_din <= sd_buff_din_latched;
                     end
                     CMD_REQ_ACK: begin
+                        ack_active <= 1'b1;
                         io_ack <= 1'b1;
                         req_pending <= 1'b0;
                         io_din <= 16'h0000;
