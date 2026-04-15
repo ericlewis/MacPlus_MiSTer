@@ -26,18 +26,20 @@
         "name": "Internal Floppy",
         "required": false,
         "parameters": "0x1",
+        "deferload": true,
         "size_maximum": "0x0C8000",
         "extensions": ["dsk"],
-        "address": "0x10000000"
+        "address": "0x00000000"
       },
       {
         "id": 2,
         "name": "External Floppy",
         "required": false,
         "parameters": "0x1",
+        "deferload": true,
         "size_maximum": "0x0C8000",
         "extensions": ["dsk"],
-        "address": "0x10000000"
+        "address": "0x00000000"
       },
       {
         "id": 3,

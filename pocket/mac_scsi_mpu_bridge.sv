@@ -123,3 +123,5 @@ always @(posedge clk or negedge reset_n) begin
 end
 
 endmodule
+
+`default_nettype wire

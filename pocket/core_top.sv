@@ -94,39 +94,6 @@ wire rtc_valid, osnotify_inmenu;
 wire savestate_start, savestate_load;
 wire target_dataslot_ack, target_dataslot_done;
 wire [2:0] target_dataslot_err;
-localparam [1:0] TARGET_REQ_READ = 2'd0;
-localparam [1:0] TARGET_REQ_WRITE = 2'd1;
-localparam [1:0] TARGET_REQ_GETFILE = 2'd2;
-localparam [1:0] TARGET_REQ_OPENFILE = 2'd3;
-
-reg        target_req_sys = 0;
-reg  [1:0] target_req_type_sys = TARGET_REQ_READ;
-reg [15:0] target_req_id_sys = 0;
-reg [31:0] target_req_slotoffset_sys = 0;
-reg [31:0] target_req_bridgeaddr_sys = 0;
-reg [31:0] target_req_length_sys = 0;
-
-wire        target_req_74a;
-wire  [1:0] target_req_type_74a;
-wire [15:0] target_req_id_74a;
-wire [31:0] target_req_slotoffset_74a;
-wire [31:0] target_req_bridgeaddr_74a;
-wire [31:0] target_req_length_74a;
-
-wire target_dataslot_read = target_req_74a && (target_req_type_74a == TARGET_REQ_READ);
-wire target_dataslot_write = target_req_74a && (target_req_type_74a == TARGET_REQ_WRITE);
-wire target_dataslot_getfile = target_req_74a && (target_req_type_74a == TARGET_REQ_GETFILE);
-wire target_dataslot_openfile = target_req_74a && (target_req_type_74a == TARGET_REQ_OPENFILE);
-wire [15:0] target_dataslot_id = target_req_id_74a;
-wire [31:0] target_dataslot_slotoffset = target_req_slotoffset_74a;
-wire [31:0] target_dataslot_bridgeaddr = target_req_bridgeaddr_74a;
-wire [31:0] target_dataslot_length = target_req_length_74a;
-wire [31:0] target_buffer_param_struct = target_req_bridgeaddr_74a;
-wire [31:0] target_buffer_resp_struct = target_req_bridgeaddr_74a;
-
-wire target_dataslot_ack_sys;
-wire target_dataslot_done_sys;
-wire [2:0] target_dataslot_err_sys;
 wire mpu_target_dataslot_read;
 wire mpu_target_dataslot_write;
 wire [15:0] mpu_target_dataslot_id;
@@ -144,36 +111,6 @@ reg  [9:0] datatable_addr = 0;
 wire [31:0] datatable_q;
 reg         datatable_wren = 1'b0;
 reg  [31:0] datatable_data = 32'd0;
-
-synch_3 #(
-    .WIDTH(115)
-) target_req_sync (
-    {
-        target_req_sys,
-        target_req_type_sys,
-        target_req_id_sys,
-        target_req_slotoffset_sys,
-        target_req_bridgeaddr_sys,
-        target_req_length_sys
-    },
-    {
-        target_req_74a,
-        target_req_type_74a,
-        target_req_id_74a,
-        target_req_slotoffset_74a,
-        target_req_bridgeaddr_74a,
-        target_req_length_74a
-    },
-    clk_74a
-);
-
-synch_3 #(
-    .WIDTH(5)
-) target_resp_sync (
-    {target_dataslot_ack, target_dataslot_done, target_dataslot_err},
-    {target_dataslot_ack_sys, target_dataslot_done_sys, target_dataslot_err_sys},
-    clk_sys
-);
 
 core_bridge_cmd icb(
     .clk(clk_74a), .reset_n(reset_n),
@@ -273,11 +210,15 @@ localparam [7:0] SLOT_ROM       = 8'd0;
 localparam [7:0] SLOT_FLOPPY_INT = 8'd1;
 localparam [7:0] SLOT_FLOPPY_EXT = 8'd2;
 localparam [7:0] SLOT_HDD       = 8'd3;
-localparam [31:0] HDD_BUFFER_BASE = 32'h20000000;
-
-wire        dl_wr;
-wire [27:0] dl_addr;
-wire [7:0]  dl_data;
+wire        rom_dl_wr;
+wire [27:0] rom_dl_addr;
+wire [7:0]  rom_dl_data;
+wire        floppy_int_dl_wr;
+wire [19:0] floppy_int_dl_addr;
+wire [7:0]  floppy_int_dl_data;
+wire        floppy_ext_dl_wr;
+wire [19:0] floppy_ext_dl_addr;
+wire [7:0]  floppy_ext_dl_data;
 
 data_loader #(
     .ADDRESS_MASK_UPPER_4(4'h1),
@@ -289,28 +230,34 @@ data_loader #(
     .clk_74a(clk_74a), .clk_memory(clk_sys),
     .bridge_wr(bridge_wr), .bridge_endian_little(bridge_endian_little),
     .bridge_addr(bridge_addr), .bridge_wr_data(bridge_wr_data),
-    .write_en(dl_wr), .write_addr(dl_addr), .write_data(dl_data)
+    .write_en(rom_dl_wr), .write_addr(rom_dl_addr), .write_data(rom_dl_data)
 );
-
-wire       hdd_dl_wr;
-wire [8:0] hdd_dl_addr;
-wire [7:0] hdd_dl_data;
 
 data_loader #(
     .ADDRESS_MASK_UPPER_4(4'h2),
-    .ADDRESS_SIZE(9)
-) hdd_loader (
+    .ADDRESS_SIZE(20)
+) floppy_int_loader (
     .clk_74a(clk_74a), .clk_memory(clk_sys),
     .bridge_wr(bridge_wr), .bridge_endian_little(bridge_endian_little),
     .bridge_addr(bridge_addr), .bridge_wr_data(bridge_wr_data),
-    .write_en(hdd_dl_wr), .write_addr(hdd_dl_addr), .write_data(hdd_dl_data)
+    .write_en(floppy_int_dl_wr), .write_addr(floppy_int_dl_addr), .write_data(floppy_int_dl_data)
+);
+
+data_loader #(
+    .ADDRESS_MASK_UPPER_4(4'h3),
+    .ADDRESS_SIZE(20)
+) floppy_ext_loader (
+    .clk_74a(clk_74a), .clk_memory(clk_sys),
+    .bridge_wr(bridge_wr), .bridge_endian_little(bridge_endian_little),
+    .bridge_addr(bridge_addr), .bridge_wr_data(bridge_wr_data),
+    .write_en(floppy_ext_dl_wr), .write_addr(floppy_ext_dl_addr), .write_data(floppy_ext_dl_data)
 );
 
 // Download tracking and ROM mode selection.
 reg dl_downloading_74a = 0;
 reg rom_is_se_74a = 0;
-reg [7:0]  dl_slot_id_74a = SLOT_ROM;
-reg [31:0] dl_slot_size_74a = 0;
+reg [31:0] floppy_int_size_74a = 0;
+reg [31:0] floppy_ext_size_74a = 0;
 reg [31:0] hdd_file_size_74a = 0;
 reg        prev_dataslot_update_74a = 0;
 always @(posedge clk_74a) begin
@@ -318,16 +265,13 @@ always @(posedge clk_74a) begin
     datatable_addr <= HDD_SIZE_DATATABLE_ADDR;
     datatable_wren <= 1'b0;
 
-    if (dataslot_requestwrite) begin
+    if (dataslot_requestwrite && (dataslot_requestwrite_id[7:0] == SLOT_ROM)) begin
         dl_downloading_74a <= 1;
-        dl_slot_id_74a <= dataslot_requestwrite_id[7:0];
-        dl_slot_size_74a <= dataslot_requestwrite_size;
-        if (dataslot_requestwrite_id[7:0] == SLOT_ROM)
-            rom_is_se_74a <= (dataslot_requestwrite_size > 32'd131072);
+        rom_is_se_74a <= (dataslot_requestwrite_size > 32'd131072);
     end
     else if (dataslot_allcomplete) dl_downloading_74a <= 0;
 
-    // Deferloaded slots report their selected file size through dataslot_update.
+    // Sidecar-managed slots report their selected file size through dataslot_update.
     // Mirror that into the shared datatable and cache the HDD size locally so
     // the SCSI target becomes "mounted" once a disk image is chosen.
     if (dataslot_update && ~prev_dataslot_update_74a) begin
@@ -335,20 +279,23 @@ always @(posedge clk_74a) begin
         datatable_data <= dataslot_update_size;
         datatable_wren <= 1'b1;
 
+        if (dataslot_update_id[7:0] == SLOT_FLOPPY_INT)
+            floppy_int_size_74a <= dataslot_update_size;
+        if (dataslot_update_id[7:0] == SLOT_FLOPPY_EXT)
+            floppy_ext_size_74a <= dataslot_update_size;
         if (dataslot_update_id[7:0] == SLOT_HDD)
             hdd_file_size_74a <= dataslot_update_size;
     end
     else begin
-    hdd_file_size_74a <= datatable_q;
+        hdd_file_size_74a <= datatable_q;
     end
 end
 
 reg dl_s0 = 0, dl_s1 = 0;
 reg rom_is_se_s0 = 0, rom_is_se_s1 = 0;
-reg [7:0] dl_slot_id_s0 = SLOT_ROM, dl_slot_id_s1 = SLOT_ROM;
-reg [31:0] dl_slot_size_s0 = 0, dl_slot_size_s1 = 0;
+reg [31:0] floppy_int_size_s0 = 0, floppy_int_size_s1 = 0;
+reg [31:0] floppy_ext_size_s0 = 0, floppy_ext_size_s1 = 0;
 reg [31:0] hdd_file_size_s0 = 0, hdd_file_size_s1 = 0;
-reg dl_active_prev = 0;
 reg [7:0] dl_tail_hold = 0;
 reg dio_write = 0;
 reg ioctl_wait = 0;
@@ -362,10 +309,10 @@ always @(posedge clk_sys) begin
     dl_s1 <= dl_s0;
     rom_is_se_s0 <= rom_is_se_74a;
     rom_is_se_s1 <= rom_is_se_s0;
-    dl_slot_id_s0 <= dl_slot_id_74a;
-    dl_slot_id_s1 <= dl_slot_id_s0;
-    dl_slot_size_s0 <= dl_slot_size_74a;
-    dl_slot_size_s1 <= dl_slot_size_s0;
+    floppy_int_size_s0 <= floppy_int_size_74a;
+    floppy_int_size_s1 <= floppy_int_size_s0;
+    floppy_ext_size_s0 <= floppy_ext_size_74a;
+    floppy_ext_size_s1 <= floppy_ext_size_s0;
     hdd_file_size_s0 <= hdd_file_size_74a;
     hdd_file_size_s1 <= hdd_file_size_s0;
     eject_int_s0 <= eject_int_toggle_74a;
@@ -381,9 +328,7 @@ always @(posedge clk_sys) begin
     apply_cfg_s1 <= apply_cfg_s0;
     apply_cfg_prev <= apply_cfg_s1;
 
-    dl_active_prev <= dl_s1;
-    if (dl_s1) dl_tail_hold <= 8'd96;
-    else if (dl_active_prev) dl_tail_hold <= 8'd96;
+    if (dl_s1 || rom_dl_wr || floppy_int_dl_wr || floppy_ext_dl_wr) dl_tail_hold <= 8'd96;
     else if (dl_tail_hold != 0) dl_tail_hold <= dl_tail_hold - 1'd1;
 end
 reg hdd_attached_s1 = 0;
@@ -397,10 +342,15 @@ always @(posedge clk_sys) begin
 end
 
 wire dl_active = dl_s1;
-wire [20:0] dl_phys_addr =
-    (dl_slot_id_s1 == SLOT_FLOPPY_INT) ? {2'b01, dl_addr[19:1]} :
-    (dl_slot_id_s1 == SLOT_FLOPPY_EXT) ? {2'b10, dl_addr[19:1]} :
-                                         {3'b000, dl_addr[17:1]};
+wire       dio_source_wr = rom_dl_wr | floppy_int_dl_wr | floppy_ext_dl_wr;
+wire [20:0] dio_phys_addr =
+    rom_dl_wr        ? {3'b000, rom_dl_addr[17:1]} :
+    floppy_int_dl_wr ? {2'b01, floppy_int_dl_addr[19:1]} :
+                       {2'b10, floppy_ext_dl_addr[19:1]};
+wire [7:0] dio_source_data =
+    rom_dl_wr        ? rom_dl_data :
+    floppy_int_dl_wr ? floppy_int_dl_data :
+                       floppy_ext_dl_data;
 
 // Convert data_loader 8-bit to 16-bit words and buffer in FIFO
 // Mac bus can only write one word per bus cycle (~32 clk_sys)
@@ -414,13 +364,14 @@ reg [9:0]  dio_fifo_rd = 0;
 
 // Write side: pack bytes into words, push to FIFO
 always @(posedge clk_sys) begin
-    if (dl_wr) begin
+    if (dio_source_wr) begin
         if (!dio_byte_toggle) begin
-            dio_byte_hi <= dl_data;
+            dio_byte_hi <= dio_source_data;
             dio_byte_toggle <= 1;
         end else begin
-            // Mac ROM is big-endian: the first byte at an even address is the word's high byte.
-            dio_fifo[dio_fifo_wr] <= {dl_phys_addr, dio_byte_hi, dl_data};
+            // SDRAM is written as 16-bit Mac words. The first byte at an even
+            // address becomes the word's high byte.
+            dio_fifo[dio_fifo_wr] <= {dio_phys_addr, dio_byte_hi, dio_source_data};
             dio_fifo_wr <= dio_fifo_wr + 1'd1;
             dio_byte_toggle <= 0;
         end
@@ -490,38 +441,62 @@ reg dsk_int_ds = 0, dsk_ext_ds = 0;
 reg dsk_int_ss = 0, dsk_ext_ss = 0;
 wire dsk_int_ins = dsk_int_ds || dsk_int_ss;
 wire dsk_ext_ins = dsk_ext_ds || dsk_ext_ss;
+reg old_dio_download = 0;
+reg pending_floppy_int_valid = 0;
+reg pending_floppy_ext_valid = 0;
+reg [31:0] pending_floppy_int_size = 0;
+reg [31:0] pending_floppy_ext_size = 0;
+reg [31:0] floppy_int_size_prev = 0;
+reg [31:0] floppy_ext_size_prev = 0;
 
 always @(posedge clk_sys) begin
-    reg old_down = 0;
+    old_dio_download <= dio_download;
+    floppy_int_size_prev <= floppy_int_size_s1;
+    floppy_ext_size_prev <= floppy_ext_size_s1;
 
-    old_down <= dio_download;
-    if (old_down && ~dio_download) begin
-        if (dl_slot_id_s1 == SLOT_FLOPPY_INT) begin
-            dsk_int_ds <= (dl_slot_size_s1 == 32'd819200);
-            dsk_int_ss <= (dl_slot_size_s1 == 32'd409600);
+    if (floppy_int_size_s1 != floppy_int_size_prev) begin
+        pending_floppy_int_valid <= 1'b1;
+        pending_floppy_int_size <= floppy_int_size_s1;
+    end
+
+    if (floppy_ext_size_s1 != floppy_ext_size_prev) begin
+        pending_floppy_ext_valid <= 1'b1;
+        pending_floppy_ext_size <= floppy_ext_size_s1;
+    end
+
+    if (old_dio_download && ~dio_download) begin
+        if (pending_floppy_int_valid) begin
+            dsk_int_ds <= (pending_floppy_int_size == 32'd819200);
+            dsk_int_ss <= (pending_floppy_int_size == 32'd409600);
+            pending_floppy_int_valid <= 1'b0;
         end
-        else if (dl_slot_id_s1 == SLOT_FLOPPY_EXT) begin
-            dsk_ext_ds <= (dl_slot_size_s1 == 32'd819200);
-            dsk_ext_ss <= (dl_slot_size_s1 == 32'd409600);
+        if (pending_floppy_ext_valid) begin
+            dsk_ext_ds <= (pending_floppy_ext_size == 32'd819200);
+            dsk_ext_ss <= (pending_floppy_ext_size == 32'd409600);
+            pending_floppy_ext_valid <= 1'b0;
         end
     end
 
     if (diskEject[0]) begin
         dsk_int_ds <= 0;
         dsk_int_ss <= 0;
+        pending_floppy_int_valid <= 1'b0;
     end
     if (eject_int_s1 != eject_int_prev) begin
         dsk_int_ds <= 0;
         dsk_int_ss <= 0;
+        pending_floppy_int_valid <= 1'b0;
     end
 
     if (diskEject[1]) begin
         dsk_ext_ds <= 0;
         dsk_ext_ss <= 0;
+        pending_floppy_ext_valid <= 1'b0;
     end
     if (eject_ext_s1 != eject_ext_prev) begin
         dsk_ext_ds <= 0;
         dsk_ext_ss <= 0;
+        pending_floppy_ext_valid <= 1'b0;
     end
 end
 
